@@ -1,7 +1,6 @@
 # Auto Claude data directory
 .auto-claude/
 # Claude
-.claude-settings.json
 # Worktrees
 .worktrees
 # Binaries
