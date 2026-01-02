@@ -3,23 +3,23 @@
   "spec": "007-combined-duration-input-1h30m",
   "state": "building",
   "subtasks": {
-    "completed": 5,
+    "completed": 7,
     "total": 9,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Test Coverage",
+    "current": "Integration Verification",
     "id": null,
-    "total": 3
+    "total": 2
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 7,
+    "number": 9,
     "started_at": "2026-01-02T22:48:00.738142"
   },
-  "last_update": "2026-01-02T22:58:12.886504"
+  "last_update": "2026-01-02T23:00:56.201075"
 }
