@@ -13,6 +13,10 @@ setup:
 test:
     go test ./...
 
+# Run linter
+lint:
+    go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run
+
 # Build the binary
 build:
     go build -o did .

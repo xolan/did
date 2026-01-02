@@ -106,6 +106,9 @@ Entries are stored in JSONL (JSON Lines) format at:
 # Run tests
 just test
 
+# Run linter
+just lint
+
 # Build the binary
 just build
 ```

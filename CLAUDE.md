@@ -32,6 +32,7 @@ internal/
 ```bash
 just setup    # Install mise tools and download Go dependencies
 just test     # Run test suite: go test ./...
+just lint     # Run linter: golangci-lint
 just build    # Build binary: go build -o did .
 just install  # Build and install to ~/.local/bin/
 ```
