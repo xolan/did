@@ -22,33 +22,6 @@ func createTempFile(t *testing.T, content string) string {
 	return tmpFile
 }
 
-// Helper to read file content
-func readFileContent(t *testing.T, path string) string {
-	t.Helper()
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-	return string(content)
-}
-
-// Helper to create test entries
-func makeEntry(description string, durationMinutes int, timestamp time.Time) entry.Entry {
-	return entry.Entry{
-		Timestamp:       timestamp,
-		Description:     description,
-		DurationMinutes: durationMinutes,
-		RawInput:        description + " for " + formatDuration(durationMinutes),
-	}
-}
-
-func formatDuration(minutes int) string {
-	if minutes >= 60 && minutes%60 == 0 {
-		return string(rune('0'+minutes/60)) + "h"
-	}
-	return string(rune('0'+minutes)) + "m"
-}
-
 func TestAppendEntry(t *testing.T) {
 	tests := []struct {
 		name          string
