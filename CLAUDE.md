@@ -39,11 +39,11 @@ just install  # Build and install to ~/.local/bin/
 ## CLI Usage
 
 ```bash
-did work on <description> for <duration>  # Log entry (e.g., "did work on feature X for 2h")
-did                                        # List today's entries
-did y                                      # List yesterday's entries
-did w                                      # List this week's entries
-did lw                                     # List last week's entries
+did <description> for <duration>  # Log entry (e.g., "did feature X for 2h")
+did                               # List today's entries
+did y                             # List yesterday's entries
+did w                             # List this week's entries
+did lw                            # List last week's entries
 ```
 
 Duration format: `Yh` (hours) or `Ym` (minutes). Max 24 hours per entry.

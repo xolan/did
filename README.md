@@ -45,16 +45,16 @@ cp did ~/.local/bin/
 ### Log a work entry
 
 ```bash
-did work on <description> for <duration>
+did <description> for <duration>
 ```
 
 **Examples:**
 
 ```bash
-did work on feature X for 2h
-did work on fixing login bug for 30m
-did work on code review for 1h
-did work on meeting with team for 45m
+did feature X for 2h
+did fixing login bug for 30m
+did code review for 1h
+did meeting with team for 45m
 ```
 
 ### View entries
@@ -71,8 +71,8 @@ did work on meeting with team for 45m
 ```
 Entries for today:
 --------------------------------------------------
-  09:30  work on feature X (2h)
-  14:00  work on fixing login bug (30m)
+  09:30  feature X (2h)
+  14:00  fixing login bug (30m)
 --------------------------------------------------
 Total: 2h 30m
 ```
