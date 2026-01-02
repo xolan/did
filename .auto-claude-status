@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "001-i-want-to-make-did-the-project-a-cli-application-w",
+  "state": "building",
+  "subtasks": {
+    "completed": 11,
+    "total": 15,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Unit Testing",
+    "id": null,
+    "total": 3
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 12,
+    "started_at": "2026-01-02T19:49:18.742514"
+  },
+  "last_update": "2026-01-02T20:05:46.933552"
+}
