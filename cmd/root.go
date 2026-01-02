@@ -24,8 +24,8 @@ Usage:
   did w                               List this week's entries
   did lw                              List last week's entries
 
-Duration format: Yh (hours) or Ym (minutes)
-Examples: 2h, 30m, 1h`,
+Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
+Examples: 2h, 30m, 1h30m`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
