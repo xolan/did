@@ -18,11 +18,11 @@ var rootCmd = &cobra.Command{
 	Long: `did is a CLI tool for logging work activities with time durations.
 
 Usage:
-  did work on <description> for <duration>    Log a new entry (e.g., did work on feature X for 2h)
-  did                                         List today's entries
-  did y                                       List yesterday's entries
-  did w                                       List this week's entries
-  did lw                                      List last week's entries
+  did <description> for <duration>    Log a new entry (e.g., did feature X for 2h)
+  did                                 List today's entries
+  did y                               List yesterday's entries
+  did w                               List this week's entries
+  did lw                              List last week's entries
 
 Duration format: Yh (hours) or Ym (minutes)
 Examples: 2h, 30m, 1h`,
@@ -85,12 +85,12 @@ func createEntry(args []string) {
 	// Join all arguments to form the raw input
 	rawInput := strings.Join(args, " ")
 
-	// Parse the input: expected format "work on <description> for <duration>"
+	// Parse the input: expected format "<description> for <duration>"
 	// Find the last "for" in the input to extract duration
 	lastForIdx := strings.LastIndex(strings.ToLower(rawInput), " for ")
 	if lastForIdx == -1 {
-		fmt.Fprintln(os.Stderr, "Error: Invalid format. Use: did work on <description> for <duration>")
-		fmt.Fprintln(os.Stderr, "Example: did work on feature X for 2h")
+		fmt.Fprintln(os.Stderr, "Error: Invalid format. Use: did <description> for <duration>")
+		fmt.Fprintln(os.Stderr, "Example: did feature X for 2h")
 		os.Exit(1)
 	}
 
