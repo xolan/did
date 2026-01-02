@@ -6,6 +6,9 @@ import (
 	"strconv"
 )
 
+// combinedTimePattern matches combined time duration in XhYm format (e.g., "1h30m", "2h15m")
+var combinedTimePattern = regexp.MustCompile(`^(\d+)h(\d+)m$`)
+
 // timePattern matches time duration in Yh (hours) or Ym (minutes) format
 var timePattern = regexp.MustCompile(`^(\d+)(h|m)$`)
 
