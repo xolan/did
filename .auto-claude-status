@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "006-change-the-input-format-from",
+  "spec": "007-combined-duration-input-1h30m",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 2,
+    "completed": 2,
+    "total": 9,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Update Help Text and Documentation",
-    "id": 1,
-    "total": 2
+    "current": "Parser Enhancement",
+    "id": null,
+    "total": 3
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 1,
-    "started_at": "2026-01-02T22:23:53.748488"
+    "number": 4,
+    "started_at": "2026-01-02T22:48:00.738142"
   },
-  "last_update": "2026-01-02T22:23:53.801918"
+  "last_update": "2026-01-02T22:53:17.224861"
 }

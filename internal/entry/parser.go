@@ -25,12 +25,12 @@ func ParseDuration(input string) (minutes int, err error) {
 	if combinedMatches != nil {
 		hours, err := strconv.Atoi(combinedMatches[1])
 		if err != nil {
-			return 0, fmt.Errorf("invalid time format: expected Yh or Ym, got %s", input)
+			return 0, fmt.Errorf("invalid time format: expected Xh, Xm, or XhYm, got %s", input)
 		}
 
 		mins, err := strconv.Atoi(combinedMatches[2])
 		if err != nil {
-			return 0, fmt.Errorf("invalid time format: expected Yh or Ym, got %s", input)
+			return 0, fmt.Errorf("invalid time format: expected Xh, Xm, or XhYm, got %s", input)
 		}
 
 		// Calculate total minutes
@@ -50,12 +50,12 @@ func ParseDuration(input string) (minutes int, err error) {
 	// Fall back to simple pattern (e.g., "2h" or "30m")
 	matches := timePattern.FindStringSubmatch(input)
 	if matches == nil {
-		return 0, fmt.Errorf("invalid time format: expected Yh or Ym, got %s", input)
+		return 0, fmt.Errorf("invalid time format: expected Xh, Xm, or XhYm, got %s", input)
 	}
 
 	value, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 0, fmt.Errorf("invalid time format: expected Yh or Ym, got %s", input)
+		return 0, fmt.Errorf("invalid time format: expected Xh, Xm, or XhYm, got %s", input)
 	}
 
 	unit := matches[2]
