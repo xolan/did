@@ -57,6 +57,37 @@ func TestParseDuration_Minutes(t *testing.T) {
 	}
 }
 
+func TestParseDuration_CombinedFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{"1h30m", "1h30m", 90},
+		{"2h15m", "2h15m", 135},
+		{"0h30m", "0h30m", 30},
+		{"1h0m", "1h0m", 60},
+		{"10h45m", "10h45m", 645},
+		{"23h59m", "23h59m", 1439},
+		{"24h0m", "24h0m", 1440},
+		{"0h1m", "0h1m", 1},
+		{"5h5m", "5h5m", 305},
+		{"12h30m", "12h30m", 750},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseDuration(tt.input)
+			if err != nil {
+				t.Errorf("ParseDuration(%q) returned unexpected error: %v", tt.input, err)
+			}
+			if result != tt.expected {
+				t.Errorf("ParseDuration(%q) = %d, expected %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestParseDuration_Invalid(t *testing.T) {
 	tests := []struct {
 		name           string
