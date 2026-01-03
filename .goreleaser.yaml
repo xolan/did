@@ -41,7 +41,8 @@ checksum:
 
 changelog:
   sort: asc
-  format: "- [`{{ .AbbreviatedCommit }}`](https://github.com/xolan/did/commit/{{ .Commit }}) {{ .Message }}"
+  abbrev: 7
+  format: "- [`{{ .SHA }}`](https://github.com/xolan/did/commit/{{ .SHA }}) {{ .Message }}"
   filters:
     exclude:
       - '^docs:'
