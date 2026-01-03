@@ -101,13 +101,13 @@ func CreateBackup(storagePath string) error {
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(backupPath)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	// Copy the file contents
 	if _, err := destFile.ReadFrom(sourceFile); err != nil {

@@ -59,7 +59,7 @@ func AppendEntry(filepath string, e entry.Entry) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	line, err := json.Marshal(e)
 	if err != nil {
@@ -87,7 +87,7 @@ func ReadEntriesWithWarnings(filepath string) (ReadResult, error) {
 		}
 		return result, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
@@ -132,7 +132,7 @@ func WriteEntries(filepath string, entries []entry.Entry) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for _, e := range entries {
 		line, err := json.Marshal(e)
@@ -202,20 +202,20 @@ func UpdateEntry(filepath string, index int, e entry.Entry) error {
 	for _, entry := range entries {
 		line, err := json.Marshal(entry)
 		if err != nil {
-			file.Close()
-			os.Remove(tmpFile)
+			_ = file.Close()
+			_ = os.Remove(tmpFile)
 			return err
 		}
 		if _, err := file.WriteString(string(line) + "\n"); err != nil {
-			file.Close()
-			os.Remove(tmpFile)
+			_ = file.Close()
+			_ = os.Remove(tmpFile)
 			return err
 		}
 	}
 
 	// Close temp file before rename
 	if err := file.Close(); err != nil {
-		os.Remove(tmpFile)
+		_ = os.Remove(tmpFile)
 		return err
 	}
 
@@ -252,7 +252,7 @@ func ValidateStorage(filepath string) (StorageHealth, error) {
 		}
 		return health, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Count total lines
 	scanner := bufio.NewScanner(file)

@@ -17,9 +17,9 @@ test:
 format:
     go fmt ./...
 
-# Run linter
+# Run linter (matches CI settings)
 lint:
-    go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run
+    go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --exclude-use-default=false
 
 # Build the binary
 build:

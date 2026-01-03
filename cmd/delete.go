@@ -39,14 +39,14 @@ func deleteEntry(indexStr string) {
 	// Parse index from string to int
 	userIndex, err := strconv.Atoi(indexStr)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Invalid index '%s'. Index must be a number\n", indexStr)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid index '%s'. Index must be a number\n", indexStr)
 		deps.Exit(1)
 		return
 	}
 
 	// Validate index is positive (1-based for user)
 	if userIndex < 1 {
-		fmt.Fprintf(deps.Stderr, "Error: Index must be 1 or greater (got %d)\n", userIndex)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index must be 1 or greater (got %d)\n", userIndex)
 		deps.Exit(1)
 		return
 	}
@@ -54,7 +54,7 @@ func deleteEntry(indexStr string) {
 	// Get storage path
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
 		deps.Exit(1)
 		return
 	}
@@ -62,14 +62,14 @@ func deleteEntry(indexStr string) {
 	// Read all entries to validate index bounds
 	entries, err := storage.ReadEntries(storagePath)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to read entries: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to read entries: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
 	// Check if there are any entries
 	if len(entries) == 0 {
-		fmt.Fprintf(deps.Stderr, "Error: No entries to delete\n")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: No entries to delete\n")
 		deps.Exit(1)
 		return
 	}
@@ -77,7 +77,7 @@ func deleteEntry(indexStr string) {
 	// Validate index is within bounds (convert to 0-based)
 	internalIndex := userIndex - 1
 	if internalIndex >= len(entries) {
-		fmt.Fprintf(deps.Stderr, "Error: Index %d out of range. Valid range: 1-%d\n", userIndex, len(entries))
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index %d out of range. Valid range: 1-%d\n", userIndex, len(entries))
 		deps.Exit(1)
 		return
 	}
@@ -91,7 +91,7 @@ func deleteEntry(indexStr string) {
 	// Prompt for confirmation unless --yes flag is set
 	if !yesFlag {
 		if !promptConfirmation() {
-			fmt.Fprintln(deps.Stdout, "Deletion cancelled")
+			_, _ = fmt.Fprintln(deps.Stdout, "Deletion cancelled")
 			return
 		}
 	}
@@ -99,19 +99,19 @@ func deleteEntry(indexStr string) {
 	// Delete the entry
 	deletedEntry, err := storage.DeleteEntry(storagePath, internalIndex)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to delete entry: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to delete entry: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
 	// Show success message
-	fmt.Fprintf(deps.Stdout, "Deleted: %s (%s)\n", deletedEntry.Description, formatDuration(deletedEntry.DurationMinutes))
+	_, _ = fmt.Fprintf(deps.Stdout, "Deleted: %s (%s)\n", deletedEntry.Description, formatDuration(deletedEntry.DurationMinutes))
 }
 
 // showEntryForDeletion displays the entry that is about to be deleted
 func showEntryForDeletion(e entry.Entry) {
-	fmt.Fprintf(deps.Stdout, "Entry to delete:\n")
-	fmt.Fprintf(deps.Stdout, "  %s  %s (%s)\n",
+	_, _ = fmt.Fprintf(deps.Stdout, "Entry to delete:\n")
+	_, _ = fmt.Fprintf(deps.Stdout, "  %s  %s (%s)\n",
 		e.Timestamp.Format("2006-01-02 15:04"),
 		e.Description,
 		formatDuration(e.DurationMinutes))
@@ -120,7 +120,7 @@ func showEntryForDeletion(e entry.Entry) {
 // promptConfirmation asks the user to confirm deletion
 // Returns true if user confirms with 'y' or 'Y', false otherwise
 func promptConfirmation() bool {
-	fmt.Fprint(deps.Stdout, "Delete this entry? [y/N]: ")
+	_, _ = fmt.Fprint(deps.Stdout, "Delete this entry? [y/N]: ")
 
 	scanner := bufio.NewScanner(deps.Stdin)
 	if !scanner.Scan() {

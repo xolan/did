@@ -129,9 +129,9 @@ func createEntry(args []string) {
 	// Find the last "for" in the input to extract duration
 	lastForIdx := strings.LastIndex(strings.ToLower(rawInput), " for ")
 	if lastForIdx == -1 {
-		fmt.Fprintln(deps.Stderr, "Error: Invalid format. Missing 'for <duration>'")
-		fmt.Fprintln(deps.Stderr, "Usage: did <description> for <duration>")
-		fmt.Fprintln(deps.Stderr, "Example: did feature X for 2h")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Invalid format. Missing 'for <duration>'")
+		_, _ = fmt.Fprintln(deps.Stderr, "Usage: did <description> for <duration>")
+		_, _ = fmt.Fprintln(deps.Stderr, "Example: did feature X for 2h")
 		deps.Exit(1)
 		return
 	}
@@ -140,7 +140,7 @@ func createEntry(args []string) {
 	durationStr := strings.TrimSpace(rawInput[lastForIdx+5:]) // +5 for " for "
 
 	if description == "" {
-		fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty")
 		deps.Exit(1)
 		return
 	}
@@ -148,9 +148,9 @@ func createEntry(args []string) {
 	// Parse the duration
 	minutes, err := entry.ParseDuration(durationStr)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Invalid duration '%s'\n", durationStr)
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintln(deps.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid duration '%s'\n", durationStr)
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
 		deps.Exit(1)
 		return
 	}
@@ -166,53 +166,53 @@ func createEntry(args []string) {
 	// Get storage path
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
 		deps.Exit(1)
 		return
 	}
 
 	// Append the entry to storage
 	if err := storage.AppendEntry(storagePath, e); err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to save entry to storage")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintf(deps.Stderr, "Hint: Check that directory exists and is writable: %s\n", storagePath)
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to save entry to storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that directory exists and is writable: %s\n", storagePath)
 		deps.Exit(1)
 		return
 	}
 
 	// Display success message
-	fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", description, formatDuration(minutes))
+	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", description, formatDuration(minutes))
 }
 
 // listEntries reads and displays entries filtered by the given time range
 func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
 		deps.Exit(1)
 		return
 	}
 
 	result, err := storage.ReadEntriesWithWarnings(storagePath)
 	if err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
 		deps.Exit(1)
 		return
 	}
 
 	// Display warnings about corrupted lines to stderr
 	if len(result.Warnings) > 0 {
-		fmt.Fprintf(deps.Stderr, "Warning: Found %d corrupted line(s) in storage file:\n", len(result.Warnings))
+		_, _ = fmt.Fprintf(deps.Stderr, "Warning: Found %d corrupted line(s) in storage file:\n", len(result.Warnings))
 		for _, warning := range result.Warnings {
-			fmt.Fprintln(deps.Stderr, formatCorruptionWarning(warning))
+			_, _ = fmt.Fprintln(deps.Stderr, formatCorruptionWarning(warning))
 		}
-		fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr)
 	}
 
 	entries := result.Entries
@@ -227,7 +227,7 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	}
 
 	if len(filtered) == 0 {
-		fmt.Fprintf(deps.Stdout, "No entries found for %s\n", period)
+		_, _ = fmt.Fprintf(deps.Stdout, "No entries found for %s\n", period)
 		return
 	}
 
@@ -238,22 +238,22 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	}
 
 	// Display entries
-	fmt.Fprintf(deps.Stdout, "Entries for %s:\n", period)
-	fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+	_, _ = fmt.Fprintf(deps.Stdout, "Entries for %s:\n", period)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
 
 	// Calculate width for right-aligned indices
 	maxIndexWidth := len(fmt.Sprintf("%d", len(filtered)))
 
 	for i, e := range filtered {
-		fmt.Fprintf(deps.Stdout, "[%*d] %s  %s (%s)\n",
+		_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s  %s (%s)\n",
 			maxIndexWidth,
 			i+1, // 1-based index for user reference
 			e.Timestamp.Format("15:04"),
 			e.Description,
 			formatDuration(e.DurationMinutes))
 	}
-	fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
-	fmt.Fprintf(deps.Stdout, "Total: %s\n", formatDuration(totalMinutes))
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s\n", formatDuration(totalMinutes))
 }
 
 // formatCorruptionWarning formats a ParseWarning into a human-readable string
@@ -271,42 +271,42 @@ func formatCorruptionWarning(warning storage.ParseWarning) string {
 func validateStorage() {
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
 	health, err := storage.ValidateStorage(storagePath)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to validate storage: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to validate storage: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
 	// Display storage path
-	fmt.Fprintf(deps.Stdout, "Storage file: %s\n", storagePath)
-	fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
+	_, _ = fmt.Fprintf(deps.Stdout, "Storage file: %s\n", storagePath)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
 
 	// Display health metrics
-	fmt.Fprintf(deps.Stdout, "Total lines:       %d\n", health.TotalLines)
-	fmt.Fprintf(deps.Stdout, "Valid entries:     %d\n", health.ValidEntries)
-	fmt.Fprintf(deps.Stdout, "Corrupted entries: %d\n", health.CorruptedEntries)
+	_, _ = fmt.Fprintf(deps.Stdout, "Total lines:       %d\n", health.TotalLines)
+	_, _ = fmt.Fprintf(deps.Stdout, "Valid entries:     %d\n", health.ValidEntries)
+	_, _ = fmt.Fprintf(deps.Stdout, "Corrupted entries: %d\n", health.CorruptedEntries)
 
 	// Display corrupted line details if any
 	if len(health.Warnings) > 0 {
-		fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
-		fmt.Fprintln(deps.Stdout, "Corrupted lines:")
+		_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
+		_, _ = fmt.Fprintln(deps.Stdout, "Corrupted lines:")
 		for _, warning := range health.Warnings {
-			fmt.Fprintln(deps.Stdout, formatCorruptionWarning(warning))
+			_, _ = fmt.Fprintln(deps.Stdout, formatCorruptionWarning(warning))
 		}
 	}
 
 	// Overall status message
-	fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 50))
 	if health.CorruptedEntries == 0 {
-		fmt.Fprintln(deps.Stdout, "Status: ✓ Storage file is healthy")
+		_, _ = fmt.Fprintln(deps.Stdout, "Status: ✓ Storage file is healthy")
 	} else {
-		fmt.Fprintf(deps.Stderr, "Status: ⚠ Storage file has %d corrupted line(s)\n", health.CorruptedEntries)
+		_, _ = fmt.Fprintf(deps.Stderr, "Status: ⚠ Storage file has %d corrupted line(s)\n", health.CorruptedEntries)
 	}
 }
 
@@ -328,8 +328,8 @@ func editEntry(cmd *cobra.Command, args []string) {
 	// Parse the index argument (1-based from user)
 	var userIndex int
 	if _, err := fmt.Sscanf(args[0], "%d", &userIndex); err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Invalid index '%s'. Index must be a number\n", args[0])
-		fmt.Fprintln(deps.Stderr, "Hint: List entries with 'did' to see available indices")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid index '%s'. Index must be a number\n", args[0])
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: List entries with 'did' to see available indices")
 		deps.Exit(1)
 		return
 	}
@@ -340,11 +340,11 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Check that at least one flag is provided
 	if newDescription == "" && newDuration == "" {
-		fmt.Fprintln(deps.Stderr, "Error: At least one flag (--description or --duration) is required")
-		fmt.Fprintln(deps.Stderr, "Usage:")
-		fmt.Fprintln(deps.Stderr, "  did edit <index> --description 'new text'")
-		fmt.Fprintln(deps.Stderr, "  did edit <index> --duration 2h")
-		fmt.Fprintln(deps.Stderr, "  did edit <index> --description 'new text' --duration 2h")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: At least one flag (--description or --duration) is required")
+		_, _ = fmt.Fprintln(deps.Stderr, "Usage:")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did edit <index> --description 'new text'")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did edit <index> --duration 2h")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did edit <index> --description 'new text' --duration 2h")
 		deps.Exit(1)
 		return
 	}
@@ -352,9 +352,9 @@ func editEntry(cmd *cobra.Command, args []string) {
 	// Get storage path
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
 		deps.Exit(1)
 		return
 	}
@@ -362,9 +362,9 @@ func editEntry(cmd *cobra.Command, args []string) {
 	// Read all entries
 	result, err := storage.ReadEntriesWithWarnings(storagePath)
 	if err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
 		deps.Exit(1)
 		return
 	}
@@ -373,9 +373,9 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Check if any entries exist
 	if len(entries) == 0 {
-		fmt.Fprintln(deps.Stderr, "Error: No entries found to edit")
-		fmt.Fprintln(deps.Stderr, "Hint: Create an entry first with 'did <description> for <duration>'")
-		fmt.Fprintln(deps.Stderr, "Example: did feature X for 2h")
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: No entries found to edit")
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Create an entry first with 'did <description> for <duration>'")
+		_, _ = fmt.Fprintln(deps.Stderr, "Example: did feature X for 2h")
 		deps.Exit(1)
 		return
 	}
@@ -385,9 +385,9 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Validate index is in range
 	if internalIndex < 0 || internalIndex >= len(entries) {
-		fmt.Fprintf(deps.Stderr, "Error: Index %d is out of range\n", userIndex)
-		fmt.Fprintf(deps.Stderr, "Valid range: 1-%d (%d %s available)\n", len(entries), len(entries), pluralize("entry", len(entries)))
-		fmt.Fprintln(deps.Stderr, "Hint: List entries with 'did' to see all indices")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index %d is out of range\n", userIndex)
+		_, _ = fmt.Fprintf(deps.Stderr, "Valid range: 1-%d (%d %s available)\n", len(entries), len(entries), pluralize("entry", len(entries)))
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: List entries with 'did' to see all indices")
 		deps.Exit(1)
 		return
 	}
@@ -404,9 +404,9 @@ func editEntry(cmd *cobra.Command, args []string) {
 	if newDuration != "" {
 		minutes, err := entry.ParseDuration(newDuration)
 		if err != nil {
-			fmt.Fprintf(deps.Stderr, "Error: Invalid duration '%s'\n", newDuration)
-			fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-			fmt.Fprintln(deps.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
+			_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid duration '%s'\n", newDuration)
+			_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+			_, _ = fmt.Fprintln(deps.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
 			deps.Exit(1)
 			return
 		}
@@ -429,15 +429,15 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Save the updated entry
 	if err := storage.UpdateEntry(storagePath, internalIndex, e); err != nil {
-		fmt.Fprintln(deps.Stderr, "Error: Failed to save updated entry to storage")
-		fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		fmt.Fprintf(deps.Stderr, "Hint: Check that file is writable: %s\n", storagePath)
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to save updated entry to storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file is writable: %s\n", storagePath)
 		deps.Exit(1)
 		return
 	}
 
 	// Display success message
-	fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, e.Description, formatDuration(e.DurationMinutes))
+	_, _ = fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, e.Description, formatDuration(e.DurationMinutes))
 }
 
 // pluralize returns the singular or plural form of a word based on count

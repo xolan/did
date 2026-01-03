@@ -35,7 +35,7 @@ func restoreFromBackup(args []string) {
 	// Get storage path
 	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
 		deps.Exit(1)
 		return
 	}
@@ -43,34 +43,34 @@ func restoreFromBackup(args []string) {
 	// List available backups
 	backups, err := storage.ListBackupsForStorage(storagePath)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to list backups: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to list backups: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
 	if len(backups) == 0 {
-		fmt.Fprintln(deps.Stdout, "No backups available")
+		_, _ = fmt.Fprintln(deps.Stdout, "No backups available")
 		deps.Exit(1)
 		return
 	}
 
 	// Display available backups
-	fmt.Fprintln(deps.Stdout, "Available backups:")
+	_, _ = fmt.Fprintln(deps.Stdout, "Available backups:")
 	for _, backup := range backups {
 		if backup.Number == 1 {
-			fmt.Fprintf(deps.Stdout, "  %d: %s (most recent)\n", backup.Number, backup.Path)
+			_, _ = fmt.Fprintf(deps.Stdout, "  %d: %s (most recent)\n", backup.Number, backup.Path)
 		} else {
-			fmt.Fprintf(deps.Stdout, "  %d: %s\n", backup.Number, backup.Path)
+			_, _ = fmt.Fprintf(deps.Stdout, "  %d: %s\n", backup.Number, backup.Path)
 		}
 	}
-	fmt.Fprintln(deps.Stdout)
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	// Determine which backup to restore
 	backupNum := 1 // Default to most recent
 	if len(args) > 0 {
 		num, err := strconv.Atoi(args[0])
 		if err != nil {
-			fmt.Fprintf(deps.Stderr, "Error: Invalid backup number '%s'\n", args[0])
+			_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid backup number '%s'\n", args[0])
 			deps.Exit(1)
 			return
 		}
@@ -87,17 +87,17 @@ func restoreFromBackup(args []string) {
 	}
 
 	if !backupExists {
-		fmt.Fprintf(deps.Stderr, "Error: Backup %d does not exist\n", backupNum)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Backup %d does not exist\n", backupNum)
 		deps.Exit(1)
 		return
 	}
 
 	// Restore the backup
 	if err := storage.RestoreBackupForStorage(storagePath, backupNum); err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: Failed to restore backup: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to restore backup: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
-	fmt.Fprintf(deps.Stdout, "Successfully restored from backup %d\n", backupNum)
+	_, _ = fmt.Fprintf(deps.Stdout, "Successfully restored from backup %d\n", backupNum)
 }
