@@ -1,8 +1,0 @@
-{"Timestamp":"2026-01-02T10:00:00Z","Description":"Valid entry 1","DurationMinutes":30,"RawInput":"Valid entry 1 for 30m"}
-{"Timestamp":"2026-01-02T11:00:00Z","Description":"Valid entry 2","DurationMinutes":60,"RawInput":"Valid entry 2 for 1h"}
-{"Timestamp":"2026-01-02T12:00:00Z","Description":"Malformed JSON - missing closing brace
-{"Timestamp":"2026-01-02T13:00:00Z","Description":"Valid entry 3","DurationMinutes":45,"RawInput":"Valid entry 3 for 45m"}
-{invalid json syntax here}
-{"Timestamp":"2026-01-02T14:00:00Z","Description":"Valid entry 4","DurationMinutes":120,"RawInput":"Valid entry 4 for 2h"}
-truncated line without proper JSON {"Timestamp":"2026-01-0
-{"Timestamp":"2026-01-02T15:00:00Z","Description":"Valid entry 5","DurationMinutes":90,"RawInput":"Valid entry 5 for 1h 30m"}

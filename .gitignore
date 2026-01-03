@@ -1,5 +1,6 @@
 # Auto Claude data directory
 .auto-claude/
+.auto-claude-status
 # Worktrees
 .worktrees/
 # Claude
@@ -8,3 +9,5 @@
 did
 # GoReleaser output
 dist/
+# Temporary test files
+/test_*
