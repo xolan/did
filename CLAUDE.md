@@ -35,12 +35,14 @@ internal/
 ## Commands
 
 ```bash
-just setup    # Install mise tools and download Go dependencies
-just test     # Run test suite: go test ./...
-just format   # Format code: go fmt ./...
-just lint     # Run linter: golangci-lint
-just build    # Build binary: go build -o did .
-just install  # Build and install to ~/.local/bin/
+just setup         # Install mise tools and download Go dependencies
+just test          # Run test suite: go test ./...
+just format        # Format code: go fmt ./...
+just lint          # Run linter: golangci-lint
+just build         # Build binary to dist/did
+just install       # Build and install to ~/.local/bin/
+just release       # Build release artifacts with GoReleaser (snapshot)
+just release-check # Validate GoReleaser configuration
 ```
 
 ## CLI Usage

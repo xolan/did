@@ -115,6 +115,16 @@ func init() {
 	editCmd.Flags().String("duration", "", "New duration for the entry (e.g., 2h, 30m)")
 }
 
+// SetVersionInfo sets the version information for the CLI
+func SetVersionInfo(version, commit, date string) {
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate(
+		"did version {{.Version}}\n" +
+			"commit: " + commit + "\n" +
+			"built: " + date + "\n",
+	)
+}
+
 // Execute runs the root command
 func Execute() error {
 	return rootCmd.Execute()

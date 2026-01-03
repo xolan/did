@@ -6,3 +6,5 @@
 .claude_settings.json
 # Binaries
 did
+# GoReleaser output
+dist/

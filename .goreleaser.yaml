@@ -28,8 +28,6 @@ builds:
 
 archives:
   - id: did-archive
-    builds:
-      - did
     formats:
       - tar.gz
     format_overrides:

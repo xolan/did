@@ -23,9 +23,18 @@ lint:
 
 # Build the binary
 build:
-    go build -o did .
+    go build -o dist/did .
+    @echo "Built: {{justfile_directory()}}/dist/did"
 
 # Build and install to ~/.local/bin/
 install: build
     mkdir -p ~/.local/bin
-    cp did ~/.local/bin/
+    cp dist/did ~/.local/bin/
+
+# Build release artifacts with GoReleaser (local snapshot, no publish)
+release:
+    go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+
+# Validate GoReleaser configuration
+release-check:
+    go run github.com/goreleaser/goreleaser/v2@latest check

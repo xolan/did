@@ -38,10 +38,10 @@ just install
 go mod download
 
 # Build the binary
-go build -o did .
+go build -o dist/did .
 
 # Install to your PATH (example)
-cp did ~/.local/bin/
+cp dist/did ~/.local/bin/
 ```
 
 ## Usage
