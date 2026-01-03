@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "010-corrupted-storage-recovery",
+  "spec": "008-edit-existing-entries",
   "state": "building",
   "subtasks": {
-    "completed": 10,
-    "total": 11,
+    "completed": 0,
+    "total": 8,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Integration Testing",
+    "current": "Integration Testing and Polish",
     "id": null,
-    "total": 3
+    "total": 2
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 12,
-    "started_at": "2026-01-02T22:48:01.723665"
+    "number": 4,
+    "started_at": "2026-01-03T14:31:40.973778"
   },
-  "last_update": "2026-01-02T23:09:32.118267"
+  "last_update": "2026-01-03T14:39:12.064422"
 }

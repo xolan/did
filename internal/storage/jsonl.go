@@ -126,7 +126,7 @@ func ReadEntries(filepath string) ([]entry.Entry, error) {
 
 // WriteEntries writes all entries to the JSON Lines storage file.
 // Overwrites the file if it exists. Creates the file with 0644 permissions.
-// This is used for operations that modify existing entries (e.g., delete).
+// This is used for operations that modify existing entries (e.g., delete, update).
 func WriteEntries(filepath string, entries []entry.Entry) error {
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -170,6 +170,57 @@ func DeleteEntry(filepath string, index int) (entry.Entry, error) {
 	}
 
 	return deleted, nil
+}
+
+// UpdateEntry updates an entry at a specific index by rewriting the JSONL file.
+// Uses 0-based indexing internally (caller handles 1-based conversion).
+// Returns error if index is out of range.
+// Uses atomic write pattern (write to temp file, then rename) for safety.
+func UpdateEntry(filepath string, index int, e entry.Entry) error {
+	// Read all entries
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return err
+	}
+
+	// Validate index
+	if index < 0 || index >= len(entries) {
+		return os.ErrInvalid
+	}
+
+	// Update the entry at the specified index
+	entries[index] = e
+
+	// Write to temporary file
+	tmpFile := filepath + ".tmp"
+	file, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	// Write all entries to temp file
+	for _, entry := range entries {
+		line, err := json.Marshal(entry)
+		if err != nil {
+			file.Close()
+			os.Remove(tmpFile)
+			return err
+		}
+		if _, err := file.WriteString(string(line) + "\n"); err != nil {
+			file.Close()
+			os.Remove(tmpFile)
+			return err
+		}
+	}
+
+	// Close temp file before rename
+	if err := file.Close(); err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+
+	// Atomic rename
+	return os.Rename(tmpFile, filepath)
 }
 
 // StorageHealth contains information about the health status of the storage file.

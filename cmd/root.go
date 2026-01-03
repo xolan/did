@@ -18,12 +18,14 @@ var rootCmd = &cobra.Command{
 	Long: `did is a CLI tool for logging work activities with time durations.
 
 Usage:
-  did <description> for <duration>    Log a new entry (e.g., did feature X for 2h)
-  did                                 List today's entries
-  did y                               List yesterday's entries
-  did w                               List this week's entries
-  did lw                              List last week's entries
-  did delete <index>                  Delete an entry (e.g., did delete 1)
+  did <description> for <duration>              Log a new entry (e.g., did feature X for 2h)
+  did                                           List today's entries
+  did y                                         List yesterday's entries
+  did w                                         List this week's entries
+  did lw                                        List last week's entries
+  did edit <index> --description 'text'         Edit entry description
+  did edit <index> --duration 2h                Edit entry duration
+  did delete <index>                            Delete an entry (e.g., did delete 1)
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m`,
@@ -70,6 +72,25 @@ var lwCmd = &cobra.Command{
 	},
 }
 
+// editCmd represents the edit command
+var editCmd = &cobra.Command{
+	Use:   "edit <index>",
+	Short: "Edit an existing entry",
+	Long: `Edit the description or duration of an existing time tracking entry.
+
+Usage:
+  did edit <index> --description 'new text'    Update entry description
+  did edit <index> --duration 2h               Update entry duration
+  did edit <index> --description 'text' --duration 2h    Update both
+
+The index refers to the entry number shown in list output (starting from 1).
+At least one flag (--description or --duration) is required.`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		editEntry(cmd, args)
+	},
+}
+
 // validateCmd represents the validate command
 var validateCmd = &cobra.Command{
 	Use:   "validate",
@@ -84,8 +105,13 @@ func init() {
 	rootCmd.AddCommand(yCmd)
 	rootCmd.AddCommand(wCmd)
 	rootCmd.AddCommand(lwCmd)
+	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(deleteCmd)
+
+	// Add flags to edit command
+	editCmd.Flags().String("description", "", "New description for the entry")
+	editCmd.Flags().String("duration", "", "New duration for the entry (e.g., 2h, 30m)")
 }
 
 // Execute runs the root command
@@ -102,7 +128,8 @@ func createEntry(args []string) {
 	// Find the last "for" in the input to extract duration
 	lastForIdx := strings.LastIndex(strings.ToLower(rawInput), " for ")
 	if lastForIdx == -1 {
-		fmt.Fprintln(os.Stderr, "Error: Invalid format. Use: did <description> for <duration>")
+		fmt.Fprintln(os.Stderr, "Error: Invalid format. Missing 'for <duration>'")
+		fmt.Fprintln(os.Stderr, "Usage: did <description> for <duration>")
 		fmt.Fprintln(os.Stderr, "Example: did feature X for 2h")
 		os.Exit(1)
 	}
@@ -118,7 +145,9 @@ func createEntry(args []string) {
 	// Parse the duration
 	minutes, err := entry.ParseDuration(durationStr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Invalid duration '%s'\n", durationStr)
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
 		os.Exit(1)
 	}
 
@@ -133,13 +162,17 @@ func createEntry(args []string) {
 	// Get storage path
 	storagePath, err := storage.GetStoragePath()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to get storage path: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Error: Failed to determine storage location")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Hint: Check that your home directory is accessible")
 		os.Exit(1)
 	}
 
 	// Append the entry to storage
 	if err := storage.AppendEntry(storagePath, e); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to save entry: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Error: Failed to save entry to storage")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Hint: Check that directory exists and is writable: %s\n", storagePath)
 		os.Exit(1)
 	}
 
@@ -151,13 +184,17 @@ func createEntry(args []string) {
 func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	storagePath, err := storage.GetStoragePath()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to get storage path: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Error: Failed to determine storage location")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Hint: Check that your home directory is accessible")
 		os.Exit(1)
 	}
 
 	result, err := storage.ReadEntriesWithWarnings(storagePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to read entries: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Error: Failed to read entries from storage")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
 		os.Exit(1)
 	}
 
@@ -195,8 +232,14 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	// Display entries
 	fmt.Printf("Entries for %s:\n", period)
 	fmt.Println(strings.Repeat("-", 50))
-	for _, e := range filtered {
-		fmt.Printf("  %s  %s (%s)\n",
+
+	// Calculate width for right-aligned indices
+	maxIndexWidth := len(fmt.Sprintf("%d", len(filtered)))
+
+	for i, e := range filtered {
+		fmt.Printf("[%*d] %s  %s (%s)\n",
+			maxIndexWidth,
+			i+1, // 1-based index for user reference
 			e.Timestamp.Format("15:04"),
 			e.Description,
 			formatDuration(e.DurationMinutes))
@@ -268,4 +311,121 @@ func formatDuration(minutes int) string {
 		return fmt.Sprintf("%dh", hours)
 	}
 	return fmt.Sprintf("%dh %dm", hours, mins)
+}
+
+// editEntry modifies an existing time tracking entry
+func editEntry(cmd *cobra.Command, args []string) {
+	// Parse the index argument (1-based from user)
+	var userIndex int
+	if _, err := fmt.Sscanf(args[0], "%d", &userIndex); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Invalid index '%s'. Index must be a number\n", args[0])
+		fmt.Fprintln(os.Stderr, "Hint: List entries with 'did' to see available indices")
+		os.Exit(1)
+	}
+
+	// Get flag values
+	newDescription, _ := cmd.Flags().GetString("description")
+	newDuration, _ := cmd.Flags().GetString("duration")
+
+	// Check that at least one flag is provided
+	if newDescription == "" && newDuration == "" {
+		fmt.Fprintln(os.Stderr, "Error: At least one flag (--description or --duration) is required")
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "  did edit <index> --description 'new text'")
+		fmt.Fprintln(os.Stderr, "  did edit <index> --duration 2h")
+		fmt.Fprintln(os.Stderr, "  did edit <index> --description 'new text' --duration 2h")
+		os.Exit(1)
+	}
+
+	// Get storage path
+	storagePath, err := storage.GetStoragePath()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: Failed to determine storage location")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Hint: Check that your home directory is accessible")
+		os.Exit(1)
+	}
+
+	// Read all entries
+	result, err := storage.ReadEntriesWithWarnings(storagePath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: Failed to read entries from storage")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
+		os.Exit(1)
+	}
+
+	entries := result.Entries
+
+	// Check if any entries exist
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "Error: No entries found to edit")
+		fmt.Fprintln(os.Stderr, "Hint: Create an entry first with 'did <description> for <duration>'")
+		fmt.Fprintln(os.Stderr, "Example: did feature X for 2h")
+		os.Exit(1)
+	}
+
+	// Convert 1-based user index to 0-based internal index
+	internalIndex := userIndex - 1
+
+	// Validate index is in range
+	if internalIndex < 0 || internalIndex >= len(entries) {
+		fmt.Fprintf(os.Stderr, "Error: Index %d is out of range\n", userIndex)
+		fmt.Fprintf(os.Stderr, "Valid range: 1-%d (%d %s available)\n", len(entries), len(entries), pluralize("entry", len(entries)))
+		fmt.Fprintln(os.Stderr, "Hint: List entries with 'did' to see all indices")
+		os.Exit(1)
+	}
+
+	// Get the entry to modify
+	e := entries[internalIndex]
+
+	// Update description if provided
+	if newDescription != "" {
+		e.Description = newDescription
+	}
+
+	// Update duration if provided
+	if newDuration != "" {
+		minutes, err := entry.ParseDuration(newDuration)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Invalid duration '%s'\n", newDuration)
+			fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Hint: Use format like '2h' (hours) or '30m' (minutes), max 24h")
+			os.Exit(1)
+		}
+		e.DurationMinutes = minutes
+	}
+
+	// Update RawInput field to reflect changes
+	if newDescription != "" && newDuration != "" {
+		// Both updated
+		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+	} else if newDescription != "" {
+		// Only description updated - reconstruct with existing duration
+		e.RawInput = fmt.Sprintf("%s for %s", e.Description, formatDuration(e.DurationMinutes))
+	} else if newDuration != "" {
+		// Only duration updated - reconstruct with existing description
+		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+	}
+
+	// Preserve original timestamp (already unchanged in e)
+
+	// Save the updated entry
+	if err := storage.UpdateEntry(storagePath, internalIndex, e); err != nil {
+		fmt.Fprintln(os.Stderr, "Error: Failed to save updated entry to storage")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Hint: Check that file is writable: %s\n", storagePath)
+		os.Exit(1)
+	}
+
+	// Display success message
+	fmt.Printf("Updated entry %d: %s (%s)\n", userIndex, e.Description, formatDuration(e.DurationMinutes))
+}
+
+// pluralize returns the singular or plural form of a word based on count
+func pluralize(word string, count int) string {
+	if count == 1 {
+		return word
+	}
+	return word + "s"
 }
