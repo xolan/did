@@ -3,6 +3,7 @@ package storage
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -121,6 +122,54 @@ func ReadEntriesWithWarnings(filepath string) (ReadResult, error) {
 func ReadEntries(filepath string) ([]entry.Entry, error) {
 	result, err := ReadEntriesWithWarnings(filepath)
 	return result.Entries, err
+}
+
+// WriteEntries writes all entries to the JSON Lines storage file.
+// Overwrites the file if it exists. Creates the file with 0644 permissions.
+// This is used for operations that modify existing entries (e.g., delete).
+func WriteEntries(filepath string, entries []entry.Entry) error {
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, e := range entries {
+		line, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		if _, err := file.WriteString(string(line) + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeleteEntry deletes the entry at the given index and returns it.
+// Index is 0-based. Returns an error if the index is out of bounds.
+// Rewrites the entire file without the deleted entry.
+func DeleteEntry(filepath string, index int) (entry.Entry, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return entry.Entry{}, err
+	}
+
+	if index < 0 || index >= len(entries) {
+		return entry.Entry{}, fmt.Errorf("index %d out of bounds (0-%d)", index, len(entries)-1)
+	}
+
+	deleted := entries[index]
+
+	// Remove the entry by creating a new slice without it
+	newEntries := append(entries[:index], entries[index+1:]...)
+
+	if err := WriteEntries(filepath, newEntries); err != nil {
+		return entry.Entry{}, err
+	}
+
+	return deleted, nil
 }
 
 // StorageHealth contains information about the health status of the storage file.

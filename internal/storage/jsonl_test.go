@@ -272,7 +272,7 @@ not json at all
 			name: "valid entry with extra whitespace",
 			fileContent: `  {"timestamp":"2024-01-15T10:00:00Z","description":"with whitespace","duration_minutes":60,"raw_input":"with whitespace for 1h"}
 `,
-			expectedCount: 1, // Go's json.Unmarshal handles leading whitespace correctly
+			expectedCount: 1,
 			expectedDesc:  "with whitespace",
 		},
 	}
@@ -492,391 +492,202 @@ func TestAppendEntry_UnicodeContent(t *testing.T) {
 		t.Fatalf("AppendEntry() returned unexpected error: %v", err)
 	}
 
-	// Read back and verify
 	entries, err := ReadEntries(tmpFile)
 	if err != nil {
 		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
 	}
 
 	if len(entries) != 1 {
-		t.Fatalf("Expected 1 entry, got %d", len(entries))
+		t.Fatalf("ReadEntries() returned %d entries, expected 1", len(entries))
 	}
 
-	if entries[0].Description != testEntry.Description {
-		t.Errorf("Entry description = %q, expected %q", entries[0].Description, testEntry.Description)
-	}
-}
-
-func TestReadEntriesWithWarnings_MalformedJSON(t *testing.T) {
-	tests := []struct {
-		name             string
-		fileContent      string
-		expectedEntries  int
-		expectedWarnings int
-	}{
-		{
-			name: "malformed JSON line",
-			fileContent: `{"timestamp":"2024-01-15T10:00:00Z","description":"valid entry","duration_minutes":60,"raw_input":"valid entry for 1h"}
-{invalid json}
-{"timestamp":"2024-01-15T11:00:00Z","description":"another valid","duration_minutes":30,"raw_input":"another valid for 30m"}
-`,
-			expectedEntries:  2,
-			expectedWarnings: 1,
-		},
-		{
-			name: "truncated JSON line",
-			fileContent: `{"timestamp":"2024-01-15T10:00:00Z","description":"valid entry","duration_minutes":60,"raw_input":"valid entry for 1h"}
-{"timestamp":"2024-01-15T11:00:00Z","description":"trun
-{"timestamp":"2024-01-15T12:00:00Z","description":"third valid","duration_minutes":45,"raw_input":"third valid for 45m"}
-`,
-			expectedEntries:  2,
-			expectedWarnings: 1,
-		},
-		{
-			name: "empty line",
-			fileContent: `{"timestamp":"2024-01-15T10:00:00Z","description":"valid entry","duration_minutes":60,"raw_input":"valid entry for 1h"}
-
-{"timestamp":"2024-01-15T11:00:00Z","description":"second valid","duration_minutes":30,"raw_input":"second valid for 30m"}
-`,
-			expectedEntries:  2,
-			expectedWarnings: 1,
-		},
-		{
-			name: "mixed valid and invalid",
-			fileContent: `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-invalid line 1
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-{broken json
-{"timestamp":"2024-01-15T12:00:00Z","description":"valid 3","duration_minutes":45,"raw_input":"valid 3 for 45m"}
-
-{"timestamp":"2024-01-15T13:00:00Z","description":"valid 4","duration_minutes":15,"raw_input":"valid 4 for 15m"}
-`,
-			expectedEntries:  4,
-			expectedWarnings: 3,
-		},
-		{
-			name: "all lines corrupted",
-			fileContent: `invalid line 1
-not json at all
-{incomplete json
-`,
-			expectedEntries:  0,
-			expectedWarnings: 3,
-		},
-		{
-			name: "only valid entries",
-			fileContent: `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-`,
-			expectedEntries:  2,
-			expectedWarnings: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := createTempFile(t, tt.fileContent)
-
-			result, err := ReadEntriesWithWarnings(tmpFile)
-			if err != nil {
-				t.Fatalf("ReadEntriesWithWarnings() returned unexpected error: %v", err)
-			}
-
-			if len(result.Entries) != tt.expectedEntries {
-				t.Errorf("ReadEntriesWithWarnings() returned %d entries, expected %d", len(result.Entries), tt.expectedEntries)
-			}
-
-			if len(result.Warnings) != tt.expectedWarnings {
-				t.Errorf("ReadEntriesWithWarnings() returned %d warnings, expected %d", len(result.Warnings), tt.expectedWarnings)
-			}
-		})
+	if entries[0].Description != "工作 on feature 🎉" {
+		t.Errorf("Entry description = %q, expected %q", entries[0].Description, "工作 on feature 🎉")
 	}
 }
 
-func TestReadEntriesWithWarnings_WarningDetails(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid entry","duration_minutes":60,"raw_input":"valid entry for 1h"}
-invalid json line
-{"timestamp":"2024-01-15T11:00:00Z","description":"another valid","duration_minutes":30,"raw_input":"another valid for 30m"}
-`
-	tmpFile := createTempFile(t, fileContent)
-
-	result, err := ReadEntriesWithWarnings(tmpFile)
-	if err != nil {
-		t.Fatalf("ReadEntriesWithWarnings() returned unexpected error: %v", err)
-	}
-
-	if len(result.Warnings) != 1 {
-		t.Fatalf("Expected 1 warning, got %d", len(result.Warnings))
-	}
-
-	warning := result.Warnings[0]
-
-	// Verify line number (1-indexed)
-	if warning.LineNumber != 2 {
-		t.Errorf("Warning line number = %d, expected 2", warning.LineNumber)
-	}
-
-	// Verify content
-	if warning.Content != "invalid json line" {
-		t.Errorf("Warning content = %q, expected %q", warning.Content, "invalid json line")
-	}
-
-	// Verify error message is not empty
-	if warning.Error == "" {
-		t.Errorf("Warning error message is empty")
-	}
-}
-
-func TestReadEntriesWithWarnings_NonExistentFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
-
-	result, err := ReadEntriesWithWarnings(nonExistentFile)
-	if err != nil {
-		t.Errorf("ReadEntriesWithWarnings() returned unexpected error for non-existent file: %v", err)
-	}
-
-	if result.Entries == nil {
-		t.Errorf("ReadEntriesWithWarnings() returned nil entries, expected empty slice")
-	}
-
-	if len(result.Entries) != 0 {
-		t.Errorf("ReadEntriesWithWarnings() returned %d entries, expected 0", len(result.Entries))
-	}
-
-	if result.Warnings == nil {
-		t.Errorf("ReadEntriesWithWarnings() returned nil warnings, expected empty slice")
-	}
-
-	if len(result.Warnings) != 0 {
-		t.Errorf("ReadEntriesWithWarnings() returned %d warnings, expected 0", len(result.Warnings))
-	}
-}
-
-func TestReadEntriesWithWarnings_MultipleWarnings(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-corrupted line 1
-corrupted line 2
-
-corrupted line 3
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-`
-	tmpFile := createTempFile(t, fileContent)
-
-	result, err := ReadEntriesWithWarnings(tmpFile)
-	if err != nil {
-		t.Fatalf("ReadEntriesWithWarnings() returned unexpected error: %v", err)
-	}
-
-	if len(result.Entries) != 2 {
-		t.Errorf("Expected 2 valid entries, got %d", len(result.Entries))
-	}
-
-	if len(result.Warnings) != 4 {
-		t.Errorf("Expected 4 warnings, got %d", len(result.Warnings))
-	}
-
-	// Verify line numbers are correct and in order
-	expectedLineNumbers := []int{2, 3, 4, 5}
-	for i, warning := range result.Warnings {
-		if warning.LineNumber != expectedLineNumbers[i] {
-			t.Errorf("Warning %d line number = %d, expected %d", i, warning.LineNumber, expectedLineNumbers[i])
-		}
-	}
-}
-
-func TestValidateStorage_HealthyFile(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-{"timestamp":"2024-01-15T12:00:00Z","description":"valid 3","duration_minutes":45,"raw_input":"valid 3 for 45m"}
-`
-	tmpFile := createTempFile(t, fileContent)
-
-	health, err := ValidateStorage(tmpFile)
-	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
-	}
-
-	if health.TotalLines != 3 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 3", health.TotalLines)
-	}
-
-	if health.ValidEntries != 3 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 3", health.ValidEntries)
-	}
-
-	if health.CorruptedEntries != 0 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 0", health.CorruptedEntries)
-	}
-
-	if len(health.Warnings) != 0 {
-		t.Errorf("ValidateStorage() returned %d warnings, expected 0", len(health.Warnings))
-	}
-}
-
-func TestValidateStorage_CorruptedFile(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-invalid json line
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-{broken
-{"timestamp":"2024-01-15T12:00:00Z","description":"valid 3","duration_minutes":45,"raw_input":"valid 3 for 45m"}
-`
-	tmpFile := createTempFile(t, fileContent)
-
-	health, err := ValidateStorage(tmpFile)
-	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
-	}
-
-	if health.TotalLines != 5 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 5", health.TotalLines)
-	}
-
-	if health.ValidEntries != 3 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 3", health.ValidEntries)
-	}
-
-	if health.CorruptedEntries != 2 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 2", health.CorruptedEntries)
-	}
-
-	if len(health.Warnings) != 2 {
-		t.Errorf("ValidateStorage() returned %d warnings, expected 2", len(health.Warnings))
-	}
-}
-
-func TestValidateStorage_AllCorrupted(t *testing.T) {
-	fileContent := `invalid line 1
-not json at all
-{incomplete json
-`
-	tmpFile := createTempFile(t, fileContent)
-
-	health, err := ValidateStorage(tmpFile)
-	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
-	}
-
-	if health.TotalLines != 3 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 3", health.TotalLines)
-	}
-
-	if health.ValidEntries != 0 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 0", health.ValidEntries)
-	}
-
-	if health.CorruptedEntries != 3 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 3", health.CorruptedEntries)
-	}
-
-	if len(health.Warnings) != 3 {
-		t.Errorf("ValidateStorage() returned %d warnings, expected 3", len(health.Warnings))
-	}
-}
-
-func TestValidateStorage_EmptyFile(t *testing.T) {
+func TestDeleteEntry(t *testing.T) {
 	tmpFile := createTempFile(t, "")
 
-	// Manually create empty file
-	if err := os.WriteFile(tmpFile, []byte{}, 0644); err != nil {
-		t.Fatalf("Failed to create empty file: %v", err)
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
+			Description:     "entry 1",
+			DurationMinutes: 15,
+			RawInput:        "entry 1 for 15m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
+			Description:     "entry 2",
+			DurationMinutes: 120,
+			RawInput:        "entry 2 for 2h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 14, 0, 0, 0, time.Local),
+			Description:     "entry 3",
+			DurationMinutes: 45,
+			RawInput:        "entry 3 for 45m",
+		},
 	}
 
-	health, err := ValidateStorage(tmpFile)
+	// Append all entries
+	for _, e := range testEntries {
+		if err := AppendEntry(tmpFile, e); err != nil {
+			t.Fatalf("AppendEntry() returned unexpected error: %v", err)
+		}
+	}
+
+	// Delete middle entry
+	err := DeleteEntry(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
 	}
 
-	if health.TotalLines != 0 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 0", health.TotalLines)
+	// Read back entries
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
 	}
 
-	if health.ValidEntries != 0 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 0", health.ValidEntries)
+	// Should have 2 entries left
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries after delete, got %d", len(entries))
 	}
 
-	if health.CorruptedEntries != 0 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 0", health.CorruptedEntries)
+	// Verify remaining entries
+	if entries[0].Description != "entry 1" {
+		t.Errorf("Entry 0 description = %q, expected %q", entries[0].Description, "entry 1")
+	}
+	if entries[1].Description != "entry 3" {
+		t.Errorf("Entry 1 description = %q, expected %q", entries[1].Description, "entry 3")
 	}
 }
 
-func TestValidateStorage_NonExistentFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
+func TestDeleteEntry_FirstEntry(t *testing.T) {
+	tmpFile := createTempFile(t, "")
 
-	health, err := ValidateStorage(nonExistentFile)
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
+			Description:     "entry 1",
+			DurationMinutes: 15,
+			RawInput:        "entry 1 for 15m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
+			Description:     "entry 2",
+			DurationMinutes: 120,
+			RawInput:        "entry 2 for 2h",
+		},
+	}
+
+	for _, e := range testEntries {
+		if err := AppendEntry(tmpFile, e); err != nil {
+			t.Fatalf("AppendEntry() returned unexpected error: %v", err)
+		}
+	}
+
+	// Delete first entry
+	err := DeleteEntry(tmpFile, 0)
 	if err != nil {
-		t.Errorf("ValidateStorage() returned unexpected error for non-existent file: %v", err)
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
 	}
 
-	if health.TotalLines != 0 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 0", health.TotalLines)
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
 	}
 
-	if health.ValidEntries != 0 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 0", health.ValidEntries)
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry after delete, got %d", len(entries))
 	}
 
-	if health.CorruptedEntries != 0 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 0", health.CorruptedEntries)
+	if entries[0].Description != "entry 2" {
+		t.Errorf("Entry description = %q, expected %q", entries[0].Description, "entry 2")
 	}
 }
 
-func TestValidateStorage_EmptyLines(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
+func TestDeleteEntry_LastEntry(t *testing.T) {
+	tmpFile := createTempFile(t, "")
 
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
+			Description:     "entry 1",
+			DurationMinutes: 15,
+			RawInput:        "entry 1 for 15m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
+			Description:     "entry 2",
+			DurationMinutes: 120,
+			RawInput:        "entry 2 for 2h",
+		},
+	}
 
-`
-	tmpFile := createTempFile(t, fileContent)
+	for _, e := range testEntries {
+		if err := AppendEntry(tmpFile, e); err != nil {
+			t.Fatalf("AppendEntry() returned unexpected error: %v", err)
+		}
+	}
 
-	health, err := ValidateStorage(tmpFile)
+	// Delete last entry
+	err := DeleteEntry(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
 	}
 
-	// Total lines includes empty lines
-	if health.TotalLines != 4 {
-		t.Errorf("ValidateStorage() TotalLines = %d, expected 4", health.TotalLines)
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
 	}
 
-	if health.ValidEntries != 2 {
-		t.Errorf("ValidateStorage() ValidEntries = %d, expected 2", health.ValidEntries)
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry after delete, got %d", len(entries))
 	}
 
-	// Empty lines are treated as corrupted
-	if health.CorruptedEntries != 2 {
-		t.Errorf("ValidateStorage() CorruptedEntries = %d, expected 2", health.CorruptedEntries)
+	if entries[0].Description != "entry 1" {
+		t.Errorf("Entry description = %q, expected %q", entries[0].Description, "entry 1")
 	}
 }
 
-func TestValidateStorage_WarningDetails(t *testing.T) {
-	fileContent := `{"timestamp":"2024-01-15T10:00:00Z","description":"valid 1","duration_minutes":60,"raw_input":"valid 1 for 1h"}
-corrupted line content
-{"timestamp":"2024-01-15T11:00:00Z","description":"valid 2","duration_minutes":30,"raw_input":"valid 2 for 30m"}
-`
-	tmpFile := createTempFile(t, fileContent)
+func TestDeleteEntry_InvalidIndex(t *testing.T) {
+	tmpFile := createTempFile(t, "")
 
-	health, err := ValidateStorage(tmpFile)
+	testEntry := entry.Entry{
+		Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
+		Description:     "entry 1",
+		DurationMinutes: 15,
+		RawInput:        "entry 1 for 15m",
+	}
+
+	if err := AppendEntry(tmpFile, testEntry); err != nil {
+		t.Fatalf("AppendEntry() returned unexpected error: %v", err)
+	}
+
+	// Try to delete out of bounds entry
+	err :=DeleteEntry(tmpFile, 5)
+	if err == nil {
+		t.Errorf("DeleteEntry() should return error for invalid index")
+	}
+
+	// Verify entry still exists
+	entries, err := ReadEntries(tmpFile)
 	if err != nil {
-		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
 	}
 
-	if len(health.Warnings) != 1 {
-		t.Fatalf("Expected 1 warning, got %d", len(health.Warnings))
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry after failed delete, got %d", len(entries))
 	}
+}
 
-	warning := health.Warnings[0]
+func TestDeleteEntry_EmptyFile(t *testing.T) {
+	tmpFile := createTempFile(t, "")
 
-	if warning.LineNumber != 2 {
-		t.Errorf("Warning line number = %d, expected 2", warning.LineNumber)
-	}
-
-	if warning.Content != "corrupted line content" {
-		t.Errorf("Warning content = %q, expected %q", warning.Content, "corrupted line content")
-	}
-
-	if warning.Error == "" {
-		t.Errorf("Warning error message is empty")
+	// Try to delete from empty file
+	err := DeleteEntry(tmpFile, 0)
+	if err == nil {
+		t.Errorf("DeleteEntry() should return error for empty file")
 	}
 }

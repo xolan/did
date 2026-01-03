@@ -23,6 +23,7 @@ Usage:
   did y                               List yesterday's entries
   did w                               List this week's entries
   did lw                              List last week's entries
+  did delete <index>                  Delete an entry (e.g., did delete 1)
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m`,
@@ -84,6 +85,7 @@ func init() {
 	rootCmd.AddCommand(wCmd)
 	rootCmd.AddCommand(lwCmd)
 	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(deleteCmd)
 }
 
 // Execute runs the root command
