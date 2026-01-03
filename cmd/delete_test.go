@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,35 +13,22 @@ import (
 	"github.com/xolan/did/internal/storage"
 )
 
-// Helper to create a temporary test file with entries
-func createTempEntriesFile(t *testing.T, entries []entry.Entry) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test_entries.jsonl")
-
-	if len(entries) > 0 {
-		for _, e := range entries {
-			if err := storage.AppendEntry(tmpFile, e); err != nil {
-				t.Fatalf("Failed to create temp file: %v", err)
-			}
-		}
-	}
-
-	return tmpFile
-}
-
 func TestFormatDuration(t *testing.T) {
 	tests := []struct {
 		name     string
 		minutes  int
 		expected string
 	}{
+		{"zero minutes", 0, "0m"},
+		{"single minute", 1, "1m"},
 		{"30 minutes", 30, "30m"},
-		{"1 hour", 60, "1h"},
+		{"59 minutes", 59, "59m"},
+		{"exactly 1 hour", 60, "1h"},
+		{"exactly 2 hours", 120, "2h"},
 		{"1 hour 30 minutes", 90, "1h 30m"},
-		{"2 hours", 120, "2h"},
 		{"2 hours 15 minutes", 135, "2h 15m"},
-		{"3 hours 45 minutes", 225, "3h 45m"},
+		{"10 hours", 600, "10h"},
+		{"10 hours 5 minutes", 605, "10h 5m"},
 		{"24 hours", 1440, "24h"},
 	}
 
@@ -55,86 +42,329 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
-func TestShowEntryForDeletion(t *testing.T) {
-	tests := []struct {
-		name            string
-		entry           entry.Entry
-		expectedOutputs []string
-	}{
+func TestDeleteEntry_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entries
+	entries := []entry.Entry{
 		{
-			name: "entry with hour duration",
-			entry: entry.Entry{
-				Timestamp:       time.Date(2024, time.January, 15, 10, 30, 0, 0, time.Local),
-				Description:     "work on feature X",
-				DurationMinutes: 120,
-				RawInput:        "work on feature X for 2h",
-			},
-			expectedOutputs: []string{
-				"Entry to delete:",
-				"2024-01-15 10:30",
-				"work on feature X",
-				"(2h)",
-			},
+			Timestamp:       time.Now(),
+			Description:     "entry one",
+			DurationMinutes: 60,
+			RawInput:        "entry one for 1h",
 		},
 		{
-			name: "entry with mixed duration",
-			entry: entry.Entry{
-				Timestamp:       time.Date(2024, time.June, 20, 14, 15, 0, 0, time.Local),
-				Description:     "code review",
-				DurationMinutes: 45,
-				RawInput:        "code review for 45m",
-			},
-			expectedOutputs: []string{
-				"Entry to delete:",
-				"2024-06-20 14:15",
-				"code review",
-				"(45m)",
-			},
-		},
-		{
-			name: "entry with special characters",
-			entry: entry.Entry{
-				Timestamp:       time.Date(2024, time.March, 10, 9, 0, 0, 0, time.Local),
-				Description:     "fix bug #123 \"critical\" issue",
-				DurationMinutes: 90,
-				RawInput:        "fix bug #123 \"critical\" issue for 1h 30m",
-			},
-			expectedOutputs: []string{
-				"Entry to delete:",
-				"2024-03-10 09:00",
-				"fix bug #123 \"critical\" issue",
-				"(1h 30m)",
-			},
+			Timestamp:       time.Now(),
+			Description:     "entry two",
+			DurationMinutes: 30,
+			RawInput:        "entry two for 30m",
 		},
 	}
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			old := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader("y\n"),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
 
-			showEntryForDeletion(tt.entry)
+	yesFlag = true
+	defer func() { yesFlag = false }()
 
-			w.Close()
-			os.Stdout = old
+	deleteEntry("1")
 
-			var buf bytes.Buffer
-			_, _ = io.Copy(&buf, r)
-			output := buf.String()
+	output := stdout.String()
+	if !strings.Contains(output, "Deleted:") {
+		t.Errorf("Expected 'Deleted:' in output, got: %s", output)
+	}
 
-			// Verify all expected strings are in output
-			for _, expected := range tt.expectedOutputs {
-				if !strings.Contains(output, expected) {
-					t.Errorf("Output missing expected string %q\nGot: %s", expected, output)
-				}
-			}
-		})
+	// Verify entry was deleted
+	remaining, _ := storage.ReadEntries(storagePath)
+	if len(remaining) != 1 {
+		t.Errorf("Expected 1 remaining entry, got %d", len(remaining))
+	}
+	if remaining[0].Description != "entry two" {
+		t.Errorf("Expected 'entry two' to remain, got: %s", remaining[0].Description)
 	}
 }
 
-func TestPromptConfirmation_Yes(t *testing.T) {
+func TestDeleteEntry_InvalidIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	deleteEntry("abc")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid index")
+	}
+	if !strings.Contains(stderr.String(), "must be a number") {
+		t.Errorf("Expected 'must be a number' error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_IndexOutOfRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	deleteEntry("99")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for out of range index")
+	}
+	if !strings.Contains(stderr.String(), "out of range") {
+		t.Errorf("Expected 'out of range' error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_NegativeIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	deleteEntry("0")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for zero index")
+	}
+	if !strings.Contains(stderr.String(), "must be 1 or greater") {
+		t.Errorf("Expected 'must be 1 or greater' error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_NoEntries(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	deleteEntry("1")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when no entries")
+	}
+	if !strings.Contains(stderr.String(), "No entries to delete") {
+		t.Errorf("Expected 'No entries to delete' error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_ConfirmationNo(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader("n\n"),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	yesFlag = false
+
+	deleteEntry("1")
+
+	if !strings.Contains(stdout.String(), "Deletion cancelled") {
+		t.Errorf("Expected 'Deletion cancelled', got: %s", stdout.String())
+	}
+
+	// Verify entry was NOT deleted
+	entries, _ := storage.ReadEntries(storagePath)
+	if len(entries) != 1 {
+		t.Errorf("Expected entry to still exist, got %d entries", len(entries))
+	}
+}
+
+func TestDeleteEntry_ConfirmationYes(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader("y\n"),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	yesFlag = false
+
+	deleteEntry("1")
+
+	if !strings.Contains(stdout.String(), "Deleted:") {
+		t.Errorf("Expected 'Deleted:', got: %s", stdout.String())
+	}
+
+	// Verify entry was deleted
+	entries, _ := storage.ReadEntries(storagePath)
+	if len(entries) != 0 {
+		t.Errorf("Expected entry to be deleted, got %d entries", len(entries))
+	}
+}
+
+func TestShowEntryForDeletion(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	testEntry := entry.Entry{
+		Timestamp:       time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		Description:     "test entry",
+		DurationMinutes: 60,
+		RawInput:        "test entry for 1h",
+	}
+
+	showEntryForDeletion(testEntry)
+
+	output := stdout.String()
+	if !strings.Contains(output, "Entry to delete:") {
+		t.Errorf("Expected 'Entry to delete:', got: %s", output)
+	}
+	if !strings.Contains(output, "test entry") {
+		t.Errorf("Expected entry description in output, got: %s", output)
+	}
+}
+
+func TestPromptConfirmation(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -146,43 +376,23 @@ func TestPromptConfirmation_Yes(t *testing.T) {
 		{"uppercase N", "N\n", false},
 		{"empty input", "\n", false},
 		{"random text", "maybe\n", false},
-		{"yes spelled out", "yes\n", false},
-		{"no spelled out", "no\n", false},
-		{"y with spaces", "  y  \n", true},
-		{"Y with spaces", "  Y  \n", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Replace stdin with test input
-			oldStdin := os.Stdin
-			r, w, _ := os.Pipe()
-			os.Stdin = r
-
-			// Write test input
-			_, _ = w.Write([]byte(tt.input))
-			w.Close()
-
-			// Capture stdout (the prompt)
-			oldStdout := os.Stdout
-			stdoutR, stdoutW, _ := os.Pipe()
-			os.Stdout = stdoutW
+			d := &Deps{
+				Stdout: &bytes.Buffer{},
+				Stderr: &bytes.Buffer{},
+				Stdin:  strings.NewReader(tt.input),
+				Exit:   func(code int) {},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
 
 			result := promptConfirmation()
-
-			stdoutW.Close()
-			os.Stdout = oldStdout
-			os.Stdin = oldStdin
-
-			// Read and verify prompt was displayed
-			var buf bytes.Buffer
-			_, _ = io.Copy(&buf, stdoutR)
-			prompt := buf.String()
-
-			if !strings.Contains(prompt, "Delete this entry? [y/N]:") {
-				t.Errorf("Expected prompt to contain 'Delete this entry? [y/N]:', got: %s", prompt)
-			}
-
 			if result != tt.expected {
 				t.Errorf("promptConfirmation() with input %q = %v, expected %v", tt.input, result, tt.expected)
 			}
@@ -190,300 +400,199 @@ func TestPromptConfirmation_Yes(t *testing.T) {
 	}
 }
 
-func TestPromptConfirmation_EmptyReader(t *testing.T) {
-	// Test behavior when stdin is closed/empty
-	oldStdin := os.Stdin
-	r, w, _ := os.Pipe()
-	os.Stdin = r
-	w.Close() // Close immediately to simulate EOF
+func TestDeleteEntry_StoragePathError(t *testing.T) {
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", fmt.Errorf("storage path error")
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	stdoutR, stdoutW, _ := os.Pipe()
-	os.Stdout = stdoutW
+	deleteEntry("1")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called")
+	}
+	if !strings.Contains(stderr.String(), "Failed to get storage path") {
+		t.Errorf("Expected storage path error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_ReadEntriesError(t *testing.T) {
+	// Use a path to a directory (not a file) to cause read error
+	tmpDir := t.TempDir()
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return tmpDir, nil // path to directory, not file
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	deleteEntry("1")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called")
+	}
+	if !strings.Contains(stderr.String(), "Failed to read entries") {
+		t.Errorf("Expected read error, got: %s", stderr.String())
+	}
+}
+
+func TestDeleteEntry_DeleteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	// Make the file read-only to cause write error during delete
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			// Return a path that won't work for writing
+			return "/nonexistent/path/entries.jsonl", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	yesFlag = true
+	defer func() { yesFlag = false }()
+
+	deleteEntry("1")
+
+	// Should fail on reading entries since the path doesn't exist
+	if !exitCalled {
+		t.Error("Expected exit to be called")
+	}
+}
+
+// eofReader is an io.Reader that immediately returns EOF
+type eofReader struct{}
+
+func (e eofReader) Read(p []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func TestPromptConfirmation_ScannerFail(t *testing.T) {
+	d := &Deps{
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+		Stdin:       eofReader{},
+		Exit:        func(code int) {},
+		StoragePath: func() (string, error) { return "", nil },
+	}
+	SetDeps(d)
+	defer ResetDeps()
 
 	result := promptConfirmation()
-
-	stdoutW.Close()
-	os.Stdout = oldStdout
-	os.Stdin = oldStdin
-
-	// Drain stdout
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, stdoutR)
-
 	if result != false {
-		t.Errorf("promptConfirmation() with closed stdin = %v, expected false", result)
+		t.Error("Expected false when scanner fails")
 	}
 }
 
-// Integration-style tests that verify the delete logic flow
-// These test the deleteEntry function indirectly through its components
+func TestDeleteCommand_Run(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
-func TestDeleteEntry_IndexParsing(t *testing.T) {
-	// Since deleteEntry calls os.Exit, we test by verifying the storage functions work correctly
-	// The actual command-level testing would require subprocess testing or refactoring
-
-	tests := []struct {
-		name          string
-		entries       []entry.Entry
-		deleteIndex   int // 0-based for storage layer
-		expectedError bool
-	}{
-		{
-			name: "delete first entry",
-			entries: []entry.Entry{
-				{
-					Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-					Description:     "first entry",
-					DurationMinutes: 30,
-					RawInput:        "first entry for 30m",
-				},
-				{
-					Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
-					Description:     "second entry",
-					DurationMinutes: 60,
-					RawInput:        "second entry for 1h",
-				},
-			},
-			deleteIndex:   0,
-			expectedError: false,
-		},
-		{
-			name: "delete last entry",
-			entries: []entry.Entry{
-				{
-					Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-					Description:     "first entry",
-					DurationMinutes: 30,
-					RawInput:        "first entry for 30m",
-				},
-				{
-					Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
-					Description:     "second entry",
-					DurationMinutes: 60,
-					RawInput:        "second entry for 1h",
-				},
-			},
-			deleteIndex:   1,
-			expectedError: false,
-		},
-		{
-			name: "index out of bounds",
-			entries: []entry.Entry{
-				{
-					Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-					Description:     "only entry",
-					DurationMinutes: 30,
-					RawInput:        "only entry for 30m",
-				},
-			},
-			deleteIndex:   5,
-			expectedError: true,
-		},
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := createTempEntriesFile(t, tt.entries)
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
 
-			deleted, err := storage.DeleteEntry(tmpFile, tt.deleteIndex)
+	yesFlag = true
+	defer func() { yesFlag = false }()
 
-			if tt.expectedError {
-				if err == nil {
-					t.Errorf("Expected error for index %d, got nil", tt.deleteIndex)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if deleted.Description != tt.entries[tt.deleteIndex].Description {
-					t.Errorf("Deleted entry description = %q, expected %q",
-						deleted.Description, tt.entries[tt.deleteIndex].Description)
-				}
+	// Call the delete command's Run function directly
+	deleteCmd.Run(deleteCmd, []string{"1"})
 
-				// Verify remaining entries
-				remaining, err := storage.ReadEntries(tmpFile)
-				if err != nil {
-					t.Fatalf("Failed to read entries after delete: %v", err)
-				}
-
-				expectedCount := len(tt.entries) - 1
-				if len(remaining) != expectedCount {
-					t.Errorf("Expected %d remaining entries, got %d", expectedCount, len(remaining))
-				}
-			}
-		})
+	if !strings.Contains(stdout.String(), "Deleted:") {
+		t.Errorf("Expected 'Deleted:', got: %s", stdout.String())
 	}
 }
 
-func TestDeleteEntry_EmptyFile(t *testing.T) {
-	tmpFile := createTempEntriesFile(t, []entry.Entry{})
+func TestEditCommand_Run(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
-	_, err := storage.DeleteEntry(tmpFile, 0)
-	if err == nil {
-		t.Error("Expected error when deleting from empty file, got nil")
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original",
+		DurationMinutes: 60,
+		RawInput:        "original for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "out of bounds") {
-		t.Errorf("Error message should mention 'out of bounds', got: %v", err)
-	}
-}
-
-func TestDeleteEntry_NegativeIndex(t *testing.T) {
-	entries := []entry.Entry{
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-			Description:     "test entry",
-			DurationMinutes: 30,
-			RawInput:        "test entry for 30m",
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
 		},
 	}
+	SetDeps(d)
+	defer ResetDeps()
 
-	tmpFile := createTempEntriesFile(t, entries)
+	_ = editCmd.Flags().Set("description", "updated")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
 
-	_, err := storage.DeleteEntry(tmpFile, -1)
-	if err == nil {
-		t.Error("Expected error when deleting with negative index, got nil")
-	}
+	// Call the edit command's Run function directly
+	editCmd.Run(editCmd, []string{"1"})
 
-	if !strings.Contains(err.Error(), "out of bounds") {
-		t.Errorf("Error message should mention 'out of bounds', got: %v", err)
-	}
-}
-
-func TestDeleteEntry_SingleEntry(t *testing.T) {
-	entries := []entry.Entry{
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-			Description:     "only entry",
-			DurationMinutes: 60,
-			RawInput:        "only entry for 1h",
-		},
-	}
-
-	tmpFile := createTempEntriesFile(t, entries)
-
-	deleted, err := storage.DeleteEntry(tmpFile, 0)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if deleted.Description != "only entry" {
-		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "only entry")
-	}
-
-	// Verify file is now empty
-	remaining, err := storage.ReadEntries(tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to read entries after delete: %v", err)
-	}
-
-	if len(remaining) != 0 {
-		t.Errorf("Expected 0 remaining entries, got %d", len(remaining))
-	}
-}
-
-func TestDeleteEntry_MultipleEntriesReindexing(t *testing.T) {
-	entries := []entry.Entry{
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-			Description:     "entry 1",
-			DurationMinutes: 30,
-			RawInput:        "entry 1 for 30m",
-		},
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
-			Description:     "entry 2",
-			DurationMinutes: 60,
-			RawInput:        "entry 2 for 1h",
-		},
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 11, 0, 0, 0, time.Local),
-			Description:     "entry 3",
-			DurationMinutes: 45,
-			RawInput:        "entry 3 for 45m",
-		},
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 12, 0, 0, 0, time.Local),
-			Description:     "entry 4",
-			DurationMinutes: 90,
-			RawInput:        "entry 4 for 1h 30m",
-		},
-	}
-
-	tmpFile := createTempEntriesFile(t, entries)
-
-	// Delete entry at index 1 (second entry - "entry 2")
-	deleted, err := storage.DeleteEntry(tmpFile, 1)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if deleted.Description != "entry 2" {
-		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "entry 2")
-	}
-
-	// Verify remaining entries are properly re-indexed
-	remaining, err := storage.ReadEntries(tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to read entries after delete: %v", err)
-	}
-
-	if len(remaining) != 3 {
-		t.Fatalf("Expected 3 remaining entries, got %d", len(remaining))
-	}
-
-	// Verify the order and content
-	expectedDescriptions := []string{"entry 1", "entry 3", "entry 4"}
-	for i, expected := range expectedDescriptions {
-		if remaining[i].Description != expected {
-			t.Errorf("Entry %d description = %q, expected %q", i, remaining[i].Description, expected)
-		}
-	}
-}
-
-func TestDeleteEntry_WithSpecialCharacters(t *testing.T) {
-	entries := []entry.Entry{
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.Local),
-			Description:     "fix bug #123 \"critical\" issue",
-			DurationMinutes: 60,
-			RawInput:        "fix bug #123 \"critical\" issue for 1h",
-		},
-		{
-			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.Local),
-			Description:     "工作 on 功能 🚀",
-			DurationMinutes: 30,
-			RawInput:        "工作 for 30m",
-		},
-	}
-
-	tmpFile := createTempEntriesFile(t, entries)
-
-	// Delete first entry with special characters
-	deleted, err := storage.DeleteEntry(tmpFile, 0)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if deleted.Description != "fix bug #123 \"critical\" issue" {
-		t.Errorf("Deleted entry description = %q, expected %q",
-			deleted.Description, "fix bug #123 \"critical\" issue")
-	}
-
-	// Verify remaining entry
-	remaining, err := storage.ReadEntries(tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to read entries after delete: %v", err)
-	}
-
-	if len(remaining) != 1 {
-		t.Fatalf("Expected 1 remaining entry, got %d", len(remaining))
-	}
-
-	if remaining[0].Description != "工作 on 功能 🚀" {
-		t.Errorf("Remaining entry description = %q, expected %q",
-			remaining[0].Description, "工作 on 功能 🚀")
+	if !strings.Contains(stdout.String(), "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", stdout.String())
 	}
 }

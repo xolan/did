@@ -505,3 +505,550 @@ func TestAppendEntry_UnicodeContent(t *testing.T) {
 		t.Errorf("Appended entry description = %q, expected %q", entries[0].Description, "工作 on feature 🎉")
 	}
 }
+
+func TestWriteEntries(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "entry one",
+			DurationMinutes: 60,
+			RawInput:        "entry one for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "entry two",
+			DurationMinutes: 30,
+			RawInput:        "entry two for 30m",
+		},
+	}
+
+	err := WriteEntries(tmpFile, testEntries)
+	if err != nil {
+		t.Fatalf("WriteEntries() returned unexpected error: %v", err)
+	}
+
+	// Read back and verify
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries, got %d", len(entries))
+	}
+
+	if entries[0].Description != "entry one" {
+		t.Errorf("Entry 0 description = %q, expected %q", entries[0].Description, "entry one")
+	}
+	if entries[1].Description != "entry two" {
+		t.Errorf("Entry 1 description = %q, expected %q", entries[1].Description, "entry two")
+	}
+}
+
+func TestWriteEntries_Overwrites(t *testing.T) {
+	// Create file with existing content
+	initialContent := `{"timestamp":"2024-01-15T08:00:00Z","description":"old entry","duration_minutes":60,"raw_input":"old for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	// Write new entries (should overwrite)
+	newEntries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "new entry",
+			DurationMinutes: 30,
+			RawInput:        "new entry for 30m",
+		},
+	}
+
+	err := WriteEntries(tmpFile, newEntries)
+	if err != nil {
+		t.Fatalf("WriteEntries() returned unexpected error: %v", err)
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 entry after overwrite, got %d", len(entries))
+	}
+
+	if entries[0].Description != "new entry" {
+		t.Errorf("Entry description = %q, expected %q", entries[0].Description, "new entry")
+	}
+}
+
+func TestWriteEntries_EmptySlice(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T08:00:00Z","description":"existing","duration_minutes":60,"raw_input":"existing for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	// Write empty slice (should create empty file)
+	err := WriteEntries(tmpFile, []entry.Entry{})
+	if err != nil {
+		t.Fatalf("WriteEntries() returned unexpected error: %v", err)
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 0 {
+		t.Errorf("Expected 0 entries after writing empty slice, got %d", len(entries))
+	}
+}
+
+func TestDeleteEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"entry one","duration_minutes":60,"raw_input":"entry one for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"entry two","duration_minutes":30,"raw_input":"entry two for 30m"}
+{"timestamp":"2024-01-15T11:00:00Z","description":"entry three","duration_minutes":45,"raw_input":"entry three for 45m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	// Delete middle entry (index 1)
+	deleted, err := DeleteEntry(tmpFile, 1)
+	if err != nil {
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "entry two" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "entry two")
+	}
+
+	// Verify remaining entries
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries after delete, got %d", len(entries))
+	}
+
+	if entries[0].Description != "entry one" {
+		t.Errorf("Entry 0 description = %q, expected %q", entries[0].Description, "entry one")
+	}
+	if entries[1].Description != "entry three" {
+		t.Errorf("Entry 1 description = %q, expected %q", entries[1].Description, "entry three")
+	}
+}
+
+func TestDeleteEntry_FirstEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"first","duration_minutes":60,"raw_input":"first for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"second","duration_minutes":30,"raw_input":"second for 30m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	deleted, err := DeleteEntry(tmpFile, 0)
+	if err != nil {
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "first" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "first")
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "second" {
+		t.Errorf("Remaining entry description = %q, expected %q", entries[0].Description, "second")
+	}
+}
+
+func TestDeleteEntry_LastEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"first","duration_minutes":60,"raw_input":"first for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"last","duration_minutes":30,"raw_input":"last for 30m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	deleted, err := DeleteEntry(tmpFile, 1)
+	if err != nil {
+		t.Fatalf("DeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "last" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "last")
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "first" {
+		t.Errorf("Remaining entry description = %q, expected %q", entries[0].Description, "first")
+	}
+}
+
+func TestDeleteEntry_InvalidIndex(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"only entry","duration_minutes":60,"raw_input":"only for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	tests := []struct {
+		name  string
+		index int
+	}{
+		{"negative index", -1},
+		{"index too large", 5},
+		{"index equals length", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DeleteEntry(tmpFile, tt.index)
+			if err == nil {
+				t.Errorf("DeleteEntry(%d) should return error for invalid index", tt.index)
+			}
+		})
+	}
+}
+
+func TestUpdateEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"original","duration_minutes":60,"raw_input":"original for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"second","duration_minutes":30,"raw_input":"second for 30m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	updatedEntry := entry.Entry{
+		Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+		Description:     "updated description",
+		DurationMinutes: 120,
+		RawInput:        "updated for 2h",
+	}
+
+	err := UpdateEntry(tmpFile, 0, updatedEntry)
+	if err != nil {
+		t.Fatalf("UpdateEntry() returned unexpected error: %v", err)
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries, got %d", len(entries))
+	}
+
+	if entries[0].Description != "updated description" {
+		t.Errorf("Updated entry description = %q, expected %q", entries[0].Description, "updated description")
+	}
+	if entries[0].DurationMinutes != 120 {
+		t.Errorf("Updated entry duration = %d, expected %d", entries[0].DurationMinutes, 120)
+	}
+	// Second entry should be unchanged
+	if entries[1].Description != "second" {
+		t.Errorf("Second entry description = %q, expected %q", entries[1].Description, "second")
+	}
+}
+
+func TestUpdateEntry_InvalidIndex(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"only","duration_minutes":60,"raw_input":"only for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	updatedEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "updated",
+		DurationMinutes: 30,
+		RawInput:        "updated for 30m",
+	}
+
+	tests := []struct {
+		name  string
+		index int
+	}{
+		{"negative index", -1},
+		{"index too large", 5},
+		{"index equals length", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UpdateEntry(tmpFile, tt.index, updatedEntry)
+			if err == nil {
+				t.Errorf("UpdateEntry(%d) should return error for invalid index", tt.index)
+			}
+		})
+	}
+}
+
+func TestValidateStorage(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"valid one","duration_minutes":60,"raw_input":"valid for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"valid two","duration_minutes":30,"raw_input":"valid for 30m"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	health, err := ValidateStorage(tmpFile)
+	if err != nil {
+		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
+	}
+
+	if health.TotalLines != 2 {
+		t.Errorf("TotalLines = %d, expected 2", health.TotalLines)
+	}
+	if health.ValidEntries != 2 {
+		t.Errorf("ValidEntries = %d, expected 2", health.ValidEntries)
+	}
+	if health.CorruptedEntries != 0 {
+		t.Errorf("CorruptedEntries = %d, expected 0", health.CorruptedEntries)
+	}
+	if len(health.Warnings) != 0 {
+		t.Errorf("Warnings count = %d, expected 0", len(health.Warnings))
+	}
+}
+
+func TestValidateStorage_WithCorruption(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"valid","duration_minutes":60,"raw_input":"valid for 1h"}
+invalid json line
+{"timestamp":"2024-01-15T10:00:00Z","description":"another valid","duration_minutes":30,"raw_input":"another for 30m"}
+also corrupted
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	health, err := ValidateStorage(tmpFile)
+	if err != nil {
+		t.Fatalf("ValidateStorage() returned unexpected error: %v", err)
+	}
+
+	if health.TotalLines != 4 {
+		t.Errorf("TotalLines = %d, expected 4", health.TotalLines)
+	}
+	if health.ValidEntries != 2 {
+		t.Errorf("ValidEntries = %d, expected 2", health.ValidEntries)
+	}
+	if health.CorruptedEntries != 2 {
+		t.Errorf("CorruptedEntries = %d, expected 2", health.CorruptedEntries)
+	}
+	if len(health.Warnings) != 2 {
+		t.Errorf("Warnings count = %d, expected 2", len(health.Warnings))
+	}
+}
+
+func TestValidateStorage_NonExistentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistent := filepath.Join(tmpDir, "does_not_exist.jsonl")
+
+	health, err := ValidateStorage(nonExistent)
+	if err != nil {
+		t.Fatalf("ValidateStorage() returned unexpected error for non-existent file: %v", err)
+	}
+
+	if health.TotalLines != 0 {
+		t.Errorf("TotalLines = %d, expected 0", health.TotalLines)
+	}
+	if health.ValidEntries != 0 {
+		t.Errorf("ValidEntries = %d, expected 0", health.ValidEntries)
+	}
+	if health.CorruptedEntries != 0 {
+		t.Errorf("CorruptedEntries = %d, expected 0", health.CorruptedEntries)
+	}
+}
+
+func TestReadEntriesWithWarnings(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"valid","duration_minutes":60,"raw_input":"valid for 1h"}
+corrupted line here
+{"timestamp":"2024-01-15T10:00:00Z","description":"also valid","duration_minutes":30,"raw_input":"also for 30m"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	result, err := ReadEntriesWithWarnings(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntriesWithWarnings() returned unexpected error: %v", err)
+	}
+
+	if len(result.Entries) != 2 {
+		t.Errorf("Entries count = %d, expected 2", len(result.Entries))
+	}
+	if len(result.Warnings) != 1 {
+		t.Errorf("Warnings count = %d, expected 1", len(result.Warnings))
+	}
+
+	if len(result.Warnings) > 0 {
+		if result.Warnings[0].LineNumber != 2 {
+			t.Errorf("Warning line number = %d, expected 2", result.Warnings[0].LineNumber)
+		}
+		if result.Warnings[0].Content != "corrupted line here" {
+			t.Errorf("Warning content = %q, expected %q", result.Warnings[0].Content, "corrupted line here")
+		}
+	}
+}
+
+func TestReadEntriesWithWarnings_PermissionError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a file
+	if err := os.WriteFile(storagePath, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Make file unreadable
+	if err := os.Chmod(storagePath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	_, err := ReadEntriesWithWarnings(storagePath)
+	if err == nil {
+		t.Error("Expected error when reading unreadable file")
+	}
+}
+
+func TestValidateStorage_PermissionError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a file
+	if err := os.WriteFile(storagePath, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Make file unreadable
+	if err := os.Chmod(storagePath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	_, err := ValidateStorage(storagePath)
+	if err == nil {
+		t.Error("Expected error when validating unreadable file")
+	}
+}
+
+func TestWriteEntries_OpenError(t *testing.T) {
+	// Use a path that can't be written to
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "subdir", "entries.jsonl")
+
+	// Don't create the subdir, so opening will fail
+	entries := []entry.Entry{{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}}
+
+	err := WriteEntries(storagePath, entries)
+	if err == nil {
+		t.Error("Expected error when writing to non-existent directory")
+	}
+}
+
+func TestAppendEntry_OpenError(t *testing.T) {
+	// Use a directory path instead of a file
+	tmpDir := t.TempDir()
+
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+
+	err := AppendEntry(tmpDir, testEntry)
+	if err == nil {
+		t.Error("Expected error when appending to a directory")
+	}
+}
+
+func TestDeleteEntry_WriteError(t *testing.T) {
+	// Use a path that doesn't exist for the write
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	// Remove write permission from the file itself
+	if err := os.Chmod(storagePath, 0444); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	_, err := DeleteEntry(storagePath, 0)
+	if err == nil {
+		t.Error("Expected error when deleting with read-only file")
+	}
+}
+
+func TestUpdateEntry_WriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	// Make directory read-only to cause write error
+	if err := os.Chmod(tmpDir, 0555); err != nil {
+		t.Skipf("Cannot change directory permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(tmpDir, 0755) }()
+
+	updatedEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "updated",
+		DurationMinutes: 120,
+		RawInput:        "updated for 2h",
+	}
+
+	err := UpdateEntry(storagePath, 0, updatedEntry)
+	if err == nil {
+		t.Error("Expected error when updating in read-only directory")
+	}
+}
+
+func TestDeleteEntry_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use a directory instead of a file
+	_, err := DeleteEntry(tmpDir, 0)
+	if err == nil {
+		t.Error("Expected error when deleting from a directory path")
+	}
+}
+
+func TestUpdateEntry_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use a directory instead of a file
+	updatedEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "updated",
+		DurationMinutes: 120,
+		RawInput:        "updated for 2h",
+	}
+	err := UpdateEntry(tmpDir, 0, updatedEntry)
+	if err == nil {
+		t.Error("Expected error when updating from a directory path")
+	}
+}

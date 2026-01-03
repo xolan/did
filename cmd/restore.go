@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -33,36 +32,47 @@ func init() {
 
 // restoreFromBackup handles the restore command logic
 func restoreFromBackup(args []string) {
-	// List available backups
-	backups, err := storage.ListBackups()
+	// Get storage path
+	storagePath, err := deps.StoragePath()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to list backups: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(deps.Stderr, "Error: Failed to get storage path: %v\n", err)
+		deps.Exit(1)
+		return
+	}
+
+	// List available backups
+	backups, err := storage.ListBackupsForStorage(storagePath)
+	if err != nil {
+		fmt.Fprintf(deps.Stderr, "Error: Failed to list backups: %v\n", err)
+		deps.Exit(1)
+		return
 	}
 
 	if len(backups) == 0 {
-		fmt.Println("No backups available")
-		os.Exit(1)
+		fmt.Fprintln(deps.Stdout, "No backups available")
+		deps.Exit(1)
+		return
 	}
 
 	// Display available backups
-	fmt.Println("Available backups:")
+	fmt.Fprintln(deps.Stdout, "Available backups:")
 	for _, backup := range backups {
 		if backup.Number == 1 {
-			fmt.Printf("  %d: %s (most recent)\n", backup.Number, backup.Path)
+			fmt.Fprintf(deps.Stdout, "  %d: %s (most recent)\n", backup.Number, backup.Path)
 		} else {
-			fmt.Printf("  %d: %s\n", backup.Number, backup.Path)
+			fmt.Fprintf(deps.Stdout, "  %d: %s\n", backup.Number, backup.Path)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(deps.Stdout)
 
 	// Determine which backup to restore
 	backupNum := 1 // Default to most recent
 	if len(args) > 0 {
 		num, err := strconv.Atoi(args[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Invalid backup number '%s'\n", args[0])
-			os.Exit(1)
+			fmt.Fprintf(deps.Stderr, "Error: Invalid backup number '%s'\n", args[0])
+			deps.Exit(1)
+			return
 		}
 		backupNum = num
 	}
@@ -77,15 +87,17 @@ func restoreFromBackup(args []string) {
 	}
 
 	if !backupExists {
-		fmt.Fprintf(os.Stderr, "Error: Backup %d does not exist\n", backupNum)
-		os.Exit(1)
+		fmt.Fprintf(deps.Stderr, "Error: Backup %d does not exist\n", backupNum)
+		deps.Exit(1)
+		return
 	}
 
 	// Restore the backup
-	if err := storage.RestoreBackup(backupNum); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to restore backup: %v\n", err)
-		os.Exit(1)
+	if err := storage.RestoreBackupForStorage(storagePath, backupNum); err != nil {
+		fmt.Fprintf(deps.Stderr, "Error: Failed to restore backup: %v\n", err)
+		deps.Exit(1)
+		return
 	}
 
-	fmt.Printf("Successfully restored from backup %d\n", backupNum)
+	fmt.Fprintf(deps.Stdout, "Successfully restored from backup %d\n", backupNum)
 }

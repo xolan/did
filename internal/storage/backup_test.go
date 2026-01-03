@@ -928,3 +928,124 @@ func TestRestoreBackup_MultipleRestores(t *testing.T) {
 		t.Errorf("After second restore, content = %q, expected %q", content, backup1Content)
 	}
 }
+
+func TestCreateBackup_SourceOpenError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a file
+	if err := os.WriteFile(storagePath, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+
+	// Make file unreadable
+	if err := os.Chmod(storagePath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	err := CreateBackup(storagePath)
+	if err == nil {
+		t.Error("Expected error when source file is unreadable")
+	}
+}
+
+func TestCreateBackup_DestCreateError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a file
+	if err := os.WriteFile(storagePath, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+
+	// Make directory read-only so backup file can't be created
+	if err := os.Chmod(tmpDir, 0555); err != nil {
+		t.Skipf("Cannot change directory permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(tmpDir, 0755) }()
+
+	err := CreateBackup(storagePath)
+	if err == nil {
+		t.Error("Expected error when backup file cannot be created")
+	}
+}
+
+func TestRestoreBackupForStorage_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	backupPath := storagePath + ".bak.1"
+
+	// Create files
+	if err := os.WriteFile(storagePath, []byte("current"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("backup"), 0644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	// Make backup file unreadable
+	if err := os.Chmod(backupPath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(backupPath, 0644) }()
+
+	err := RestoreBackupForStorage(storagePath, 1)
+	if err == nil {
+		t.Error("Expected error when backup file is unreadable")
+	}
+}
+
+func TestRestoreBackupForStorage_WriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	backupPath := storagePath + ".bak.1"
+
+	// Create files
+	if err := os.WriteFile(storagePath, []byte("current"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("backup"), 0644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	// Make storage file read-only so it can't be overwritten
+	if err := os.Chmod(storagePath, 0444); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	err := RestoreBackupForStorage(storagePath, 1)
+	if err == nil {
+		t.Error("Expected error when storage file cannot be written")
+	}
+}
+
+func TestGetBackupPath_WrapperFunction(t *testing.T) {
+	// Test the wrapper function GetBackupPath
+	// It should work when GetStoragePath works
+	path, err := GetBackupPath(1)
+	if err != nil {
+		// If we can't get storage path in test environment, skip
+		t.Skipf("GetBackupPath returned error: %v", err)
+	}
+	if path == "" {
+		t.Error("Expected non-empty path")
+	}
+}
+
+func TestListBackups(t *testing.T) {
+	// Test the wrapper function ListBackups
+	_, err := ListBackups()
+	// May return error in test environment if we can't get storage path
+	// Just make sure it doesn't panic
+	_ = err
+}
+
+func TestRestoreBackup(t *testing.T) {
+	// Test the wrapper function RestoreBackup with invalid number
+	err := RestoreBackup(0)
+	if err == nil {
+		t.Error("Expected error for invalid backup number 0")
+	}
+}
