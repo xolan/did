@@ -41,6 +41,7 @@ checksum:
 
 changelog:
   sort: asc
+  format: "- [`{{ .AbbreviatedCommit }}`](https://github.com/xolan/did/commit/{{ .Commit }}) {{ .Message }}"
   filters:
     exclude:
       - '^docs:'
@@ -55,3 +56,24 @@ release:
     name: did
   draft: false
   prerelease: auto
+  header: |
+    ## did {{ .Version }}
+
+    A CLI tool for time tracking. Log work activities with durations and view entries by time period.
+
+    ### Installation
+
+    **Download binary:**
+    Download the appropriate archive for your platform below and extract the `did` binary.
+
+    **Go install:**
+    ```bash
+    go install github.com/xolan/did@{{ .Tag }}
+    ```
+
+    ### Verifying Downloads
+
+    Checksums are provided in `checksums.txt`. Verify your download:
+    ```bash
+    sha256sum -c checksums.txt --ignore-missing
+    ```
