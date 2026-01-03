@@ -476,8 +476,8 @@ func TestIsInRange(t *testing.T) {
 
 func TestIsInRange_WeekRange(t *testing.T) {
 	// Test using a week range (Monday-Sunday)
-	start := makeTime(2024, time.January, 15, 0, 0, 0)   // Monday
-	end := makeTime(2024, time.January, 21, 23, 59, 59)  // Sunday
+	start := makeTime(2024, time.January, 15, 0, 0, 0)  // Monday
+	end := makeTime(2024, time.January, 21, 23, 59, 59) // Sunday
 
 	tests := []struct {
 		name     string

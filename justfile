@@ -13,6 +13,10 @@ setup:
 test:
     go test ./...
 
+# Format code
+format:
+    go fmt ./...
+
 # Run linter
 lint:
     go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run

@@ -227,10 +227,10 @@ func TestReadEntries_EmptyFile(t *testing.T) {
 
 func TestReadEntries_Malformed(t *testing.T) {
 	tests := []struct {
-		name           string
-		fileContent    string
-		expectedCount  int
-		expectedDesc   string
+		name          string
+		fileContent   string
+		expectedCount int
+		expectedDesc  string
 	}{
 		{
 			name: "skip malformed line, return valid entry",

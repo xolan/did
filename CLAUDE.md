@@ -13,7 +13,10 @@
 
 ```
 main.go                           # Entry point
-cmd/root.go                       # Cobra command definitions (did, y, w, lw)
+cmd/
+  root.go                         # Cobra command definitions (did, y, w, lw, edit, validate)
+  delete.go                       # Delete command
+  restore.go                      # Restore from backup command
 internal/
   entry/
     entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput)
@@ -22,6 +25,8 @@ internal/
   storage/
     jsonl.go                      # JSONL storage (AppendEntry, ReadEntries, GetStoragePath)
     jsonl_test.go
+    backup.go                     # Backup management (CreateBackup, ListBackups, RestoreBackup)
+    backup_test.go
   timeutil/
     datefilter.go                 # Date range utilities (Today, Yesterday, ThisWeek, LastWeek)
     datefilter_test.go
@@ -32,6 +37,7 @@ internal/
 ```bash
 just setup    # Install mise tools and download Go dependencies
 just test     # Run test suite: go test ./...
+just format   # Format code: go fmt ./...
 just lint     # Run linter: golangci-lint
 just build    # Build binary: go build -o did .
 just install  # Build and install to ~/.local/bin/
@@ -45,9 +51,15 @@ did                               # List today's entries
 did y                             # List yesterday's entries
 did w                             # List this week's entries
 did lw                            # List last week's entries
+did edit <index> --description X  # Edit entry description
+did edit <index> --duration 2h    # Edit entry duration
+did delete <index>                # Delete an entry (with confirmation)
+did validate                      # Check storage file health
+did restore                       # Restore from most recent backup
+did restore <n>                   # Restore from backup #n (1-3)
 ```
 
-Duration format: `Yh` (hours) or `Ym` (minutes). Max 24 hours per entry.
+Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.
 
 ## Data Storage
 

@@ -127,11 +127,17 @@ type BackupInfo struct {
 // .bak.1 is the most recent backup, .bak.2 is older, .bak.3 is oldest.
 // Returns an empty slice if no backups exist.
 func ListBackups() ([]BackupInfo, error) {
+	return ListBackupsForStorage("")
+}
+
+// ListBackupsForStorage returns available backup files for a specific storage path.
+// If storagePath is empty, uses GetStoragePath() to get the default storage location.
+func ListBackupsForStorage(storagePath string) ([]BackupInfo, error) {
 	var backups []BackupInfo
 
 	// Check each backup number from 1 to MaxBackupCount
 	for i := 1; i <= MaxBackupCount; i++ {
-		backupPath, err := GetBackupPath(i)
+		backupPath, err := GetBackupPathForStorage(storagePath, i)
 		if err != nil {
 			return nil, err
 		}
@@ -153,28 +159,38 @@ func ListBackups() ([]BackupInfo, error) {
 // Creates a backup of the current state before restoring for safety.
 // Returns an error if the backup number is invalid or the backup file doesn't exist.
 func RestoreBackup(backupNum int) error {
+	return RestoreBackupForStorage("", backupNum)
+}
+
+// RestoreBackupForStorage restores a backup file to the specified storage file.
+// If storagePath is empty, uses GetStoragePath() to get the default storage location.
+func RestoreBackupForStorage(storagePath string, backupNum int) error {
 	// Validate backup number
 	if backupNum < 1 || backupNum > MaxBackupCount {
 		return fmt.Errorf("invalid backup number %d, must be between 1 and %d", backupNum, MaxBackupCount)
 	}
 
+	// Resolve storage path if empty
+	if storagePath == "" {
+		var err error
+		storagePath, err = GetStoragePath()
+		if err != nil {
+			return err
+		}
+	}
+
 	// Get the backup path
-	backupPath, err := GetBackupPath(backupNum)
+	backupPath, err := GetBackupPathForStorage(storagePath, backupNum)
 	if err != nil {
 		return err
 	}
 
-	// Check if backup file exists
-	if _, err := os.Stat(backupPath); err != nil {
+	// Read backup content BEFORE creating safety backup (CreateBackup rotates backups)
+	backupContent, err := os.ReadFile(backupPath)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("backup %d does not exist", backupNum)
 		}
-		return err
-	}
-
-	// Get the main storage path
-	storagePath, err := GetStoragePath()
-	if err != nil {
 		return err
 	}
 
@@ -183,21 +199,8 @@ func RestoreBackup(backupNum int) error {
 		return err
 	}
 
-	// Copy the backup file to the main storage file
-	sourceFile, err := os.Open(backupPath)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(storagePath)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	// Copy the file contents
-	if _, err := destFile.ReadFrom(sourceFile); err != nil {
+	// Write the backup content to the main storage file
+	if err := os.WriteFile(storagePath, backupContent, 0644); err != nil {
 		return err
 	}
 

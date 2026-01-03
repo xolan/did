@@ -25,7 +25,9 @@ Usage:
   did lw                                        List last week's entries
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
-  did delete <index>                            Delete an entry (e.g., did delete 1)
+  did delete <index>                            Delete an entry (with confirmation)
+  did validate                                  Check storage file health
+  did restore [n]                               Restore from backup (default: most recent)
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m`,

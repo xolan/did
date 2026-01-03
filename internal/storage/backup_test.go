@@ -21,15 +21,6 @@ func createTempStorage(t *testing.T, content string) string {
 	return tmpFile
 }
 
-// Helper to create a backup file for testing
-func createBackupFile(t *testing.T, dir string, n int, content string) {
-	t.Helper()
-	backupPath := filepath.Join(dir, "entries.jsonl"+BackupSuffix+"."+strconv.Itoa(n))
-	if err := os.WriteFile(backupPath, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create backup file: %v", err)
-	}
-}
-
 // Helper to check if a file exists
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
@@ -407,7 +398,7 @@ func TestRotateBackups_NoExistingBackups(t *testing.T) {
 	}
 }
 
-func TestConstants(t *testing.T) {
+func TestBackupConstants(t *testing.T) {
 	// Verify backup constants are set correctly
 	if BackupSuffix != ".bak" {
 		t.Errorf("BackupSuffix = %q, expected %q", BackupSuffix, ".bak")
@@ -488,13 +479,13 @@ func TestListBackups_OneBackup(t *testing.T) {
 		t.Fatalf("CreateBackup() failed: %v", err)
 	}
 
-	backups, err := ListBackups()
+	backups, err := ListBackupsForStorage(tmpFile)
 	if err != nil {
-		t.Fatalf("ListBackups() returned unexpected error: %v", err)
+		t.Fatalf("ListBackupsForStorage() returned unexpected error: %v", err)
 	}
 
 	if len(backups) != 1 {
-		t.Fatalf("ListBackups() returned %d backups, expected 1", len(backups))
+		t.Fatalf("ListBackupsForStorage() returned %d backups, expected 1", len(backups))
 	}
 
 	// Verify the backup info
@@ -529,13 +520,13 @@ func TestListBackups_TwoBackups(t *testing.T) {
 		t.Fatalf("Second CreateBackup() failed: %v", err)
 	}
 
-	backups, err := ListBackups()
+	backups, err := ListBackupsForStorage(tmpFile)
 	if err != nil {
-		t.Fatalf("ListBackups() returned unexpected error: %v", err)
+		t.Fatalf("ListBackupsForStorage() returned unexpected error: %v", err)
 	}
 
 	if len(backups) != 2 {
-		t.Fatalf("ListBackups() returned %d backups, expected 2", len(backups))
+		t.Fatalf("ListBackupsForStorage() returned %d backups, expected 2", len(backups))
 	}
 
 	// Verify backups are sorted by recency (.bak.1 is most recent)
@@ -570,13 +561,13 @@ func TestListBackups_ThreeBackups(t *testing.T) {
 		}
 	}
 
-	backups, err := ListBackups()
+	backups, err := ListBackupsForStorage(tmpFile)
 	if err != nil {
-		t.Fatalf("ListBackups() returned unexpected error: %v", err)
+		t.Fatalf("ListBackupsForStorage() returned unexpected error: %v", err)
 	}
 
 	if len(backups) != 3 {
-		t.Fatalf("ListBackups() returned %d backups, expected 3", len(backups))
+		t.Fatalf("ListBackupsForStorage() returned %d backups, expected 3", len(backups))
 	}
 
 	// Verify backups are sorted by recency
@@ -696,9 +687,9 @@ func TestRestoreBackup_ValidBackup(t *testing.T) {
 	}
 
 	// Restore from backup 1
-	err := RestoreBackup(1)
+	err := RestoreBackupForStorage(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("RestoreBackup(1) returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(1) returned unexpected error: %v", err)
 	}
 
 	// Verify main storage file now contains backup content
@@ -734,9 +725,9 @@ func TestRestoreBackup_RestoresFromBackup2(t *testing.T) {
 	}
 
 	// Restore from backup 2
-	err := RestoreBackup(2)
+	err := RestoreBackupForStorage(tmpFile, 2)
 	if err != nil {
-		t.Fatalf("RestoreBackup(2) returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(2) returned unexpected error: %v", err)
 	}
 
 	// Verify main storage file now contains backup 2 content
@@ -761,9 +752,9 @@ func TestRestoreBackup_RestoresFromBackup3(t *testing.T) {
 	}
 
 	// Restore from backup 3
-	err := RestoreBackup(3)
+	err := RestoreBackupForStorage(tmpFile, 3)
 	if err != nil {
-		t.Fatalf("RestoreBackup(3) returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(3) returned unexpected error: %v", err)
 	}
 
 	// Verify main storage file now contains backup 3 content
@@ -787,9 +778,9 @@ func TestRestoreBackup_EmptyBackupFile(t *testing.T) {
 	}
 
 	// Restore from empty backup
-	err := RestoreBackup(1)
+	err := RestoreBackupForStorage(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("RestoreBackup(1) with empty backup returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(1) with empty backup returned unexpected error: %v", err)
 	}
 
 	// Verify main storage file is now empty
@@ -820,9 +811,9 @@ func TestRestoreBackup_CreatesParentDirectory(t *testing.T) {
 	}
 
 	// Restore should work without errors
-	err := RestoreBackup(1)
+	err := RestoreBackupForStorage(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("RestoreBackup(1) returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(1) returned unexpected error: %v", err)
 	}
 
 	// Verify restore succeeded
@@ -850,9 +841,9 @@ func TestRestoreBackup_LargeBackupFile(t *testing.T) {
 	}
 
 	// Restore from large backup
-	err := RestoreBackup(1)
+	err := RestoreBackupForStorage(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("RestoreBackup(1) with large backup returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(1) with large backup returned unexpected error: %v", err)
 	}
 
 	// Verify main storage file now contains large backup content
@@ -877,9 +868,9 @@ func TestRestoreBackup_PreservesBackupNumber(t *testing.T) {
 	}
 
 	// Restore from backup 1
-	err := RestoreBackup(1)
+	err := RestoreBackupForStorage(tmpFile, 1)
 	if err != nil {
-		t.Fatalf("RestoreBackup(1) returned unexpected error: %v", err)
+		t.Fatalf("RestoreBackupForStorage(1) returned unexpected error: %v", err)
 	}
 
 	// Verify backup file still exists
@@ -911,8 +902,8 @@ func TestRestoreBackup_MultipleRestores(t *testing.T) {
 	}
 
 	// First restore from backup 2
-	if err := RestoreBackup(2); err != nil {
-		t.Fatalf("First RestoreBackup(2) failed: %v", err)
+	if err := RestoreBackupForStorage(tmpFile, 2); err != nil {
+		t.Fatalf("First RestoreBackupForStorage(2) failed: %v", err)
 	}
 
 	// Verify content is backup 2
@@ -927,8 +918,8 @@ func TestRestoreBackup_MultipleRestores(t *testing.T) {
 		t.Fatalf("Failed to recreate .bak.1: %v", err)
 	}
 
-	if err := RestoreBackup(1); err != nil {
-		t.Fatalf("Second RestoreBackup(1) failed: %v", err)
+	if err := RestoreBackupForStorage(tmpFile, 1); err != nil {
+		t.Fatalf("Second RestoreBackupForStorage(1) failed: %v", err)
 	}
 
 	// Verify content is now backup 1

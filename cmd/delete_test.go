@@ -121,7 +121,7 @@ func TestShowEntryForDeletion(t *testing.T) {
 			os.Stdout = old
 
 			var buf bytes.Buffer
-			io.Copy(&buf, r)
+			_, _ = io.Copy(&buf, r)
 			output := buf.String()
 
 			// Verify all expected strings are in output
@@ -160,7 +160,7 @@ func TestPromptConfirmation_Yes(t *testing.T) {
 			os.Stdin = r
 
 			// Write test input
-			w.Write([]byte(tt.input))
+			_, _ = w.Write([]byte(tt.input))
 			w.Close()
 
 			// Capture stdout (the prompt)
@@ -176,7 +176,7 @@ func TestPromptConfirmation_Yes(t *testing.T) {
 
 			// Read and verify prompt was displayed
 			var buf bytes.Buffer
-			io.Copy(&buf, stdoutR)
+			_, _ = io.Copy(&buf, stdoutR)
 			prompt := buf.String()
 
 			if !strings.Contains(prompt, "Delete this entry? [y/N]:") {
@@ -210,7 +210,7 @@ func TestPromptConfirmation_EmptyReader(t *testing.T) {
 
 	// Drain stdout
 	var buf bytes.Buffer
-	io.Copy(&buf, stdoutR)
+	_, _ = io.Copy(&buf, stdoutR)
 
 	if result != false {
 		t.Errorf("promptConfirmation() with closed stdin = %v, expected false", result)
