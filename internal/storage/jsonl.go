@@ -16,6 +16,21 @@ const (
 	EntriesFile = "entries.jsonl"
 )
 
+// ParseWarning represents a warning about a corrupted or malformed entry
+type ParseWarning struct {
+	LineNumber int    // Line number in the file (1-indexed)
+	Content    string // Raw content of the corrupted line
+	Error      string // Description of the parsing error
+}
+
+// ReadResult contains the results of reading entries from storage,
+// including both successfully parsed entries and any warnings about
+// corrupted or malformed lines.
+type ReadResult struct {
+	Entries  []entry.Entry  // Successfully parsed entries
+	Warnings []ParseWarning // Warnings about corrupted lines
+}
+
 // GetStoragePath returns the path to the entries storage file.
 // Uses os.UserConfigDir() for cross-platform XDG-compliant config directory.
 // Creates the config directory if it doesn't exist.
@@ -54,28 +69,110 @@ func AppendEntry(filepath string, e entry.Entry) error {
 	return err
 }
 
-// ReadEntries reads all entries from the JSON Lines storage file.
-// Returns an empty slice if the file doesn't exist (graceful handling).
-// Skips malformed lines for fault tolerance.
-func ReadEntries(filepath string) ([]entry.Entry, error) {
+// ReadEntriesWithWarnings reads all entries from the JSON Lines storage file
+// and returns both successfully parsed entries and warnings about any corrupted lines.
+// Returns an empty ReadResult if the file doesn't exist (graceful handling).
+// Collects detailed warnings for each malformed line including line number, content, and error.
+func ReadEntriesWithWarnings(filepath string) (ReadResult, error) {
+	result := ReadResult{
+		Entries:  []entry.Entry{},
+		Warnings: []ParseWarning{},
+	}
+
 	file, err := os.Open(filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []entry.Entry{}, nil
+			return result, nil
 		}
-		return nil, err
+		return result, err
 	}
 	defer file.Close()
 
-	var entries []entry.Entry
 	scanner := bufio.NewScanner(file)
+	lineNumber := 0
 	for scanner.Scan() {
+		lineNumber++
+		lineContent := scanner.Text()
+
 		var e entry.Entry
-		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
-			continue // Skip malformed lines
+		if err := json.Unmarshal([]byte(lineContent), &e); err != nil {
+			// Record warning for corrupted line
+			result.Warnings = append(result.Warnings, ParseWarning{
+				LineNumber: lineNumber,
+				Content:    lineContent,
+				Error:      err.Error(),
+			})
+			continue
 		}
-		entries = append(entries, e)
+		result.Entries = append(result.Entries, e)
 	}
 
-	return entries, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+// ReadEntries reads all entries from the JSON Lines storage file.
+// Returns an empty slice if the file doesn't exist (graceful handling).
+// Skips malformed lines for fault tolerance.
+// This function is maintained for backward compatibility and internally calls ReadEntriesWithWarnings.
+func ReadEntries(filepath string) ([]entry.Entry, error) {
+	result, err := ReadEntriesWithWarnings(filepath)
+	return result.Entries, err
+}
+
+// StorageHealth contains information about the health status of the storage file.
+// It provides metrics on total lines, valid entries, corrupted entries, and detailed
+// warnings about each corruption.
+type StorageHealth struct {
+	TotalLines       int            // Total number of lines in the storage file
+	ValidEntries     int            // Number of successfully parsed entries
+	CorruptedEntries int            // Number of corrupted/malformed lines
+	Warnings         []ParseWarning // Detailed information about each corrupted line
+}
+
+// ValidateStorage analyzes the storage file and returns health status information.
+// Returns metrics on total lines, valid entries, corrupted entries, and details
+// about each corruption. Returns empty health status if file doesn't exist.
+func ValidateStorage(filepath string) (StorageHealth, error) {
+	health := StorageHealth{
+		TotalLines:       0,
+		ValidEntries:     0,
+		CorruptedEntries: 0,
+		Warnings:         []ParseWarning{},
+	}
+
+	// Check if file exists
+	file, err := os.Open(filepath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return health, nil
+		}
+		return health, err
+	}
+	defer file.Close()
+
+	// Count total lines
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		health.TotalLines++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return health, err
+	}
+
+	// Get entries and warnings
+	result, err := ReadEntriesWithWarnings(filepath)
+	if err != nil {
+		return health, err
+	}
+
+	health.ValidEntries = len(result.Entries)
+	health.CorruptedEntries = len(result.Warnings)
+	health.Warnings = result.Warnings
+
+	return health, nil
 }

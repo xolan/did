@@ -69,10 +69,21 @@ var lwCmd = &cobra.Command{
 	},
 }
 
+// validateCmd represents the validate command
+var validateCmd = &cobra.Command{
+	Use:   "validate",
+	Short: "Check storage file health",
+	Long:  `Validate the storage file and report on its health status, including any corrupted entries.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		validateStorage()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(yCmd)
 	rootCmd.AddCommand(wCmd)
 	rootCmd.AddCommand(lwCmd)
+	rootCmd.AddCommand(validateCmd)
 }
 
 // Execute runs the root command
@@ -142,12 +153,22 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 		os.Exit(1)
 	}
 
-	entries, err := storage.ReadEntries(storagePath)
+	result, err := storage.ReadEntriesWithWarnings(storagePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to read entries: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Display warnings about corrupted lines to stderr
+	if len(result.Warnings) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: Found %d corrupted line(s) in storage file:\n", len(result.Warnings))
+		for _, warning := range result.Warnings {
+			fmt.Fprintln(os.Stderr, formatCorruptionWarning(warning))
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
+	entries := result.Entries
 	start, end := timeRangeFunc()
 
 	// Filter entries by time range
@@ -180,6 +201,58 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	}
 	fmt.Println(strings.Repeat("-", 50))
 	fmt.Printf("Total: %s\n", formatDuration(totalMinutes))
+}
+
+// formatCorruptionWarning formats a ParseWarning into a human-readable string
+// with line number, truncated content (max 50 chars), and error description.
+func formatCorruptionWarning(warning storage.ParseWarning) string {
+	// Truncate content if too long (max 50 chars)
+	content := warning.Content
+	if len(content) > 50 {
+		content = content[:47] + "..."
+	}
+	return fmt.Sprintf("  Line %d: %s (error: %s)", warning.LineNumber, content, warning.Error)
+}
+
+// validateStorage checks the storage file health and reports status
+func validateStorage() {
+	storagePath, err := storage.GetStoragePath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to get storage path: %v\n", err)
+		os.Exit(1)
+	}
+
+	health, err := storage.ValidateStorage(storagePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to validate storage: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display storage path
+	fmt.Printf("Storage file: %s\n", storagePath)
+	fmt.Println(strings.Repeat("=", 50))
+
+	// Display health metrics
+	fmt.Printf("Total lines:       %d\n", health.TotalLines)
+	fmt.Printf("Valid entries:     %d\n", health.ValidEntries)
+	fmt.Printf("Corrupted entries: %d\n", health.CorruptedEntries)
+
+	// Display corrupted line details if any
+	if len(health.Warnings) > 0 {
+		fmt.Println(strings.Repeat("=", 50))
+		fmt.Println("Corrupted lines:")
+		for _, warning := range health.Warnings {
+			fmt.Println(formatCorruptionWarning(warning))
+		}
+	}
+
+	// Overall status message
+	fmt.Println(strings.Repeat("=", 50))
+	if health.CorruptedEntries == 0 {
+		fmt.Println("Status: ✓ Storage file is healthy")
+	} else {
+		fmt.Fprintf(os.Stderr, "Status: ⚠ Storage file has %d corrupted line(s)\n", health.CorruptedEntries)
+	}
 }
 
 // formatDuration formats minutes as a human-readable string
