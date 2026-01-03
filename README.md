@@ -1,5 +1,9 @@
 # did
 
+[![CI](https://github.com/xolan/did/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/xolan/did/actions/workflows/ci.yml)
+[![Lint](https://github.com/xolan/did/actions/workflows/lint.yml/badge.svg?branch=master)](https://github.com/xolan/did/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/xolan/did/branch/master/graph/badge.svg)](https://codecov.io/gh/xolan/did)
+
 A simple CLI tool for tracking time spent on tasks.
 
 ## Features
