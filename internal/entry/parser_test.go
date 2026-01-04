@@ -236,8 +236,8 @@ func equalStringSlices(a, b []string) bool {
 
 func TestParseProjectAndTags_NoProjectNoTags(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -267,8 +267,8 @@ func TestParseProjectAndTags_NoProjectNoTags(t *testing.T) {
 
 func TestParseProjectAndTags_ProjectOnly(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -301,8 +301,8 @@ func TestParseProjectAndTags_ProjectOnly(t *testing.T) {
 
 func TestParseProjectAndTags_SingleTag(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -335,8 +335,8 @@ func TestParseProjectAndTags_SingleTag(t *testing.T) {
 
 func TestParseProjectAndTags_MultipleTags(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -367,8 +367,8 @@ func TestParseProjectAndTags_MultipleTags(t *testing.T) {
 
 func TestParseProjectAndTags_ProjectAndTags(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -401,8 +401,8 @@ func TestParseProjectAndTags_ProjectAndTags(t *testing.T) {
 func TestParseProjectAndTags_MultipleProjects(t *testing.T) {
 	// When multiple @project tokens are found, the last one wins
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -430,8 +430,8 @@ func TestParseProjectAndTags_MultipleProjects(t *testing.T) {
 
 func TestParseProjectAndTags_WhitespaceHandling(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -462,8 +462,8 @@ func TestParseProjectAndTags_WhitespaceHandling(t *testing.T) {
 
 func TestParseProjectAndTags_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string
@@ -507,8 +507,8 @@ func TestParseProjectAndTags_EdgeCases(t *testing.T) {
 func TestParseProjectAndTags_CaseSensitivity(t *testing.T) {
 	// Project and tag names should preserve their original case
 	tests := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		expectedDesc string
 		expectedProj string
 		expectedTags []string

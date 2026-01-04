@@ -449,7 +449,19 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Update description if provided
 	if newDescription != "" {
-		e.Description = newDescription
+		// Parse project and tags from new description
+		cleanDesc, project, tags := entry.ParseProjectAndTags(newDescription)
+
+		// Check that cleaned description is not empty (in case it was only @project/#tags)
+		if cleanDesc == "" {
+			_, _ = fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty (only project/tags provided)")
+			deps.Exit(1)
+			return
+		}
+
+		e.Description = cleanDesc
+		e.Project = project
+		e.Tags = tags
 	}
 
 	// Update duration if provided
@@ -466,15 +478,20 @@ func editEntry(cmd *cobra.Command, args []string) {
 	}
 
 	// Update RawInput field to reflect changes
+	// Include project/tags in raw input reconstruction
+	descWithMeta := e.Description
+	if e.Project != "" || len(e.Tags) > 0 {
+		descWithMeta = fmt.Sprintf("%s %s", e.Description, formatProjectAndTags(e.Project, e.Tags))
+	}
 	if newDescription != "" && newDuration != "" {
 		// Both updated
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, newDuration)
 	} else if newDescription != "" {
 		// Only description updated - reconstruct with existing duration
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, formatDuration(e.DurationMinutes))
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, formatDuration(e.DurationMinutes))
 	} else if newDuration != "" {
-		// Only duration updated - reconstruct with existing description
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+		// Only duration updated - reconstruct with existing description and project/tags
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, newDuration)
 	}
 
 	// Preserve original timestamp (already unchanged in e)
@@ -488,8 +505,8 @@ func editEntry(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Display success message
-	_, _ = fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, e.Description, formatDuration(e.DurationMinutes))
+	// Display success message with project/tags
+	_, _ = fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, formatEntryForLog(e.Description, e.Project, e.Tags), formatDuration(e.DurationMinutes))
 }
 
 // pluralize returns the singular or plural form of a word based on count

@@ -1048,3 +1048,229 @@ func TestFormatEntryForLog(t *testing.T) {
 		})
 	}
 }
+
+func TestEditEntry_DescriptionWithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry without project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original task",
+		DurationMinutes: 60,
+		RawInput:        "original task for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description containing @project and #tags
+	_ = editCmd.Flags().Set("description", "fix bug @acme #bugfix #urgent")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify success message shows project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output, got: %s", output)
+	}
+
+	// Verify entry was correctly updated
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+		t.Errorf("Expected tags ['bugfix', 'urgent'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_DurationPreservesProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix", "urgent"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit only duration
+	_ = editCmd.Flags().Set("duration", "2h")
+	defer func() { _ = editCmd.Flags().Set("duration", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify success message shows project/tags (preserved)
+	output := stdout.String()
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "2h") {
+		t.Errorf("Expected '2h' in output, got: %s", output)
+	}
+
+	// Verify project/tags are preserved in the entry
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme' preserved, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags preserved, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 120 {
+		t.Errorf("Expected duration 120, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestEditEntry_RemoveProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, _, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description that has NO project/tags
+	_ = editCmd.Flags().Set("description", "plain description")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify project/tags were removed
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "plain description" {
+		t.Errorf("Expected description 'plain description', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected empty tags, got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_AddProjectAndTagsToExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "plain task",
+		DurationMinutes: 60,
+		RawInput:        "plain task for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Add project and tags via edit
+	_ = editCmd.Flags().Set("description", "updated task @newproject #newtag")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	output := stdout.String()
+	if !strings.Contains(output, "@newproject") {
+		t.Errorf("Expected '@newproject' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#newtag") {
+		t.Errorf("Expected '#newtag' in output, got: %s", output)
+	}
+
+	// Verify entry was updated correctly
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Project != "newproject" {
+		t.Errorf("Expected project 'newproject', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 1 || entries[0].Tags[0] != "newtag" {
+		t.Errorf("Expected tags ['newtag'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_EmptyDescriptionWithOnlyProjectTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original",
+		DurationMinutes: 60,
+		RawInput:        "original for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Try to edit with only @project/#tags (no actual description)
+	_ = editCmd.Flags().Set("description", "@acme #bugfix")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for empty description")
+	}
+	if !strings.Contains(stderr.String(), "Description cannot be empty") {
+		t.Errorf("Expected empty description error, got: %s", stderr.String())
+	}
+}
