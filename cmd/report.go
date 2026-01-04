@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,7 +106,7 @@ func runReport(cmd *cobra.Command, args []string) {
 	// Determine report mode
 	if groupBy == "project" {
 		// Grouped by project report (subtask 3.1)
-		_, _ = fmt.Fprintln(deps.Stdout, "Grouped by project report - to be implemented")
+		runGroupByProjectReport(cmd)
 		return
 	}
 
@@ -345,7 +346,7 @@ func runSingleTagReport(cmd *cobra.Command, tagFilters []string) {
 			var err error
 			toDate, err := timeutil.ParseDate(toStr)
 			if err != nil {
-				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --to date: %v\n", err)
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --from date: %v\n", err)
 				deps.Exit(1)
 				return
 			}
@@ -465,4 +466,201 @@ func runSingleTagReport(cmd *cobra.Command, tagFilters []string) {
 	}
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
 	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s (%d %s)\n", formatDuration(totalMinutes), len(filtered), pluralize("entry", len(filtered)))
+}
+
+// runGroupByProjectReport generates a report showing hours grouped by all projects
+func runGroupByProjectReport(cmd *cobra.Command) {
+	// Parse date filtering flags
+	fromStr, _ := cmd.Flags().GetString("from")
+	toStr, _ := cmd.Flags().GetString("to")
+	lastDays, _ := cmd.Flags().GetInt("last")
+
+	// Validate flag combinations
+	if lastDays > 0 && (fromStr != "" || toStr != "") {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Cannot use --last with --from or --to")
+		_, _ = fmt.Fprintln(deps.Stderr, "Use either --last N or --from/--to, not both")
+		deps.Exit(1)
+		return
+	}
+
+	// Parse date range
+	var startDate, endDate time.Time
+	var hasDateFilter bool
+
+	if lastDays > 0 {
+		// Use relative days
+		now := time.Now()
+		endDate = timeutil.EndOfDay(now)
+		startDate = timeutil.StartOfDay(now.AddDate(0, 0, -(lastDays - 1)))
+		hasDateFilter = true
+	} else if fromStr != "" || toStr != "" {
+		// Use explicit date range
+		hasDateFilter = true
+
+		// Parse from date
+		if fromStr != "" {
+			var err error
+			startDate, err = timeutil.ParseDate(fromStr)
+			if err != nil {
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --from date: %v\n", err)
+				deps.Exit(1)
+				return
+			}
+		} else {
+			// No from date: use the beginning of time
+			startDate = time.Time{}
+		}
+
+		// Parse to date
+		if toStr != "" {
+			var err error
+			toDate, err := timeutil.ParseDate(toStr)
+			if err != nil {
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --to date: %v\n", err)
+				deps.Exit(1)
+				return
+			}
+			endDate = timeutil.EndOfDay(toDate)
+		} else {
+			// No to date: use now
+			endDate = timeutil.EndOfDay(time.Now())
+		}
+	}
+
+	// Get storage path
+	storagePath, err := deps.StoragePath()
+	if err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		deps.Exit(1)
+		return
+	}
+
+	// Read all entries from storage
+	result, err := storage.ReadEntriesWithWarnings(storagePath)
+	if err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
+		deps.Exit(1)
+		return
+	}
+
+	// Display warnings about corrupted lines to stderr
+	if len(result.Warnings) > 0 {
+		_, _ = fmt.Fprintf(deps.Stderr, "Warning: Found %d corrupted line(s) in storage file:\n", len(result.Warnings))
+		for _, warning := range result.Warnings {
+			_, _ = fmt.Fprintln(deps.Stderr, formatCorruptionWarning(warning))
+		}
+		_, _ = fmt.Fprintln(deps.Stderr)
+	}
+
+	// Filter out soft-deleted entries
+	var activeEntries []entry.Entry
+	for _, e := range result.Entries {
+		if e.DeletedAt == nil {
+			activeEntries = append(activeEntries, e)
+		}
+	}
+
+	// Apply date filtering if specified
+	filtered := activeEntries
+	if hasDateFilter {
+		dateFiltered := make([]entry.Entry, 0)
+		for _, e := range filtered {
+			if timeutil.IsInRange(e.Timestamp, startDate, endDate) {
+				dateFiltered = append(dateFiltered, e)
+			}
+		}
+		filtered = dateFiltered
+	}
+
+	// Check if any results found
+	if len(filtered) == 0 {
+		if hasDateFilter {
+			_, _ = fmt.Fprintln(deps.Stdout, "No entries found in the specified date range")
+		} else {
+			_, _ = fmt.Fprintln(deps.Stdout, "No entries found")
+		}
+		return
+	}
+
+	// Group entries by project
+	type ProjectGroup struct {
+		Name         string
+		TotalMinutes int
+		EntryCount   int
+	}
+
+	projectGroups := make(map[string]*ProjectGroup)
+
+	for _, e := range filtered {
+		projectName := e.Project
+		if projectName == "" {
+			projectName = "(no project)"
+		}
+
+		if _, exists := projectGroups[projectName]; !exists {
+			projectGroups[projectName] = &ProjectGroup{Name: projectName}
+		}
+
+		projectGroups[projectName].TotalMinutes += e.DurationMinutes
+		projectGroups[projectName].EntryCount++
+	}
+
+	// Convert map to slice for sorting
+	var groups []*ProjectGroup
+	for _, group := range projectGroups {
+		groups = append(groups, group)
+	}
+
+	// Sort by total time (descending)
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].TotalMinutes > groups[j].TotalMinutes
+	})
+
+	// Calculate grand totals
+	grandTotalMinutes := 0
+	grandTotalEntries := 0
+	for _, group := range groups {
+		grandTotalMinutes += group.TotalMinutes
+		grandTotalEntries += group.EntryCount
+	}
+
+	// Display results
+	reportHeader := "Report grouped by project"
+	if hasDateFilter {
+		if lastDays > 0 {
+			reportHeader += fmt.Sprintf(" (last %d %s)", lastDays, pluralize("day", lastDays))
+		} else {
+			reportHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
+		}
+	}
+	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", reportHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+
+	for _, group := range groups {
+		// Format project name with special handling for "(no project)"
+		projectDisplay := group.Name
+		if group.Name == "(no project)" {
+			projectDisplay = group.Name // Keep as is, no @ prefix
+		} else {
+			projectDisplay = "@" + group.Name
+		}
+
+		_, _ = fmt.Fprintf(deps.Stdout, "%-30s  %10s  (%d %s)\n",
+			projectDisplay,
+			formatDuration(group.TotalMinutes),
+			group.EntryCount,
+			pluralize("entry", group.EntryCount))
+	}
+
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintf(deps.Stdout, "Grand Total: %s (%d %s across %d %s)\n",
+		formatDuration(grandTotalMinutes),
+		grandTotalEntries,
+		pluralize("entry", grandTotalEntries),
+		len(groups),
+		pluralize("project", len(groups)))
 }
