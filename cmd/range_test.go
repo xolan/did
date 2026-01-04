@@ -51,7 +51,7 @@ func TestHandleFromCommand_ValidDates(t *testing.T) {
 	defer ResetDeps()
 
 	// Test ISO format: from 2024-01-01 to 2024-01-31
-	handleFromCommand([]string{"2024-01-01", "to", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"2024-01-01", "to", "2024-01-31"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "entry in range") {
@@ -92,7 +92,7 @@ func TestHandleFromCommand_ValidDatesEuropeanFormat(t *testing.T) {
 	defer ResetDeps()
 
 	// Test European format: from 01/01/2024 to 31/01/2024
-	handleFromCommand([]string{"01/01/2024", "to", "31/01/2024"})
+	handleFromCommand(fromCmd, []string{"01/01/2024", "to", "31/01/2024"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "test entry") {
@@ -130,7 +130,7 @@ func TestHandleFromCommand_SingleDay(t *testing.T) {
 	defer ResetDeps()
 
 	// Test single day range: from 2024-01-15 to 2024-01-15
-	handleFromCommand([]string{"2024-01-15", "to", "2024-01-15"})
+	handleFromCommand(fromCmd, []string{"2024-01-15", "to", "2024-01-15"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "single day entry") {
@@ -161,7 +161,7 @@ func TestHandleFromCommand_MissingToKeyword(t *testing.T) {
 	defer ResetDeps()
 
 	// Missing 'to' keyword
-	handleFromCommand([]string{"2024-01-01", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"2024-01-01", "2024-01-31"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for missing 'to' keyword")
@@ -190,7 +190,7 @@ func TestHandleFromCommand_MissingStartDate(t *testing.T) {
 	defer ResetDeps()
 
 	// 'to' keyword is first argument (missing start date)
-	handleFromCommand([]string{"to", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"to", "2024-01-31"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for missing start date")
@@ -219,7 +219,7 @@ func TestHandleFromCommand_MissingEndDate(t *testing.T) {
 	defer ResetDeps()
 
 	// 'to' keyword is last argument (missing end date)
-	handleFromCommand([]string{"2024-01-01", "to"})
+	handleFromCommand(fromCmd, []string{"2024-01-01", "to"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for missing end date")
@@ -248,7 +248,7 @@ func TestHandleFromCommand_InvalidStartDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Invalid start date format
-	handleFromCommand([]string{"invalid-date", "to", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"invalid-date", "to", "2024-01-31"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for invalid start date")
@@ -281,7 +281,7 @@ func TestHandleFromCommand_InvalidEndDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Invalid end date format
-	handleFromCommand([]string{"2024-01-01", "to", "invalid-date"})
+	handleFromCommand(fromCmd, []string{"2024-01-01", "to", "invalid-date"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for invalid end date")
@@ -314,7 +314,7 @@ func TestHandleFromCommand_StartAfterEnd(t *testing.T) {
 	defer ResetDeps()
 
 	// Start date after end date
-	handleFromCommand([]string{"2024-01-31", "to", "2024-01-01"})
+	handleFromCommand(fromCmd, []string{"2024-01-31", "to", "2024-01-01"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called when start date is after end date")
@@ -344,7 +344,7 @@ func TestHandleFromCommand_PartialStartDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Partial date (year-month only)
-	handleFromCommand([]string{"2024-01", "to", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"2024-01", "to", "2024-01-31"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for partial date")
@@ -378,7 +378,7 @@ func TestHandleFromCommand_EmptyDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Empty start date (space only, will be trimmed)
-	handleFromCommand([]string{"", "to", "2024-01-31"})
+	handleFromCommand(fromCmd, []string{"", "to", "2024-01-31"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for empty date")

@@ -58,7 +58,7 @@ func TestHandleLastCommand_ValidInput(t *testing.T) {
 	defer ResetDeps()
 
 	// Test: last 7 days
-	handleLastCommand([]string{"7", "days"})
+	handleLastCommand(lastCmd, []string{"7", "days"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "recent entry") {
@@ -120,7 +120,7 @@ func TestHandleLastCommand_ThirtyDays(t *testing.T) {
 	defer ResetDeps()
 
 	// Test: last 30 days
-	handleLastCommand([]string{"30", "days"})
+	handleLastCommand(lastCmd, []string{"30", "days"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "mid-month entry") {
@@ -179,7 +179,7 @@ func TestHandleLastCommand_OneDay(t *testing.T) {
 	defer ResetDeps()
 
 	// Test: last 1 day (singular form)
-	handleLastCommand([]string{"1", "day"})
+	handleLastCommand(lastCmd, []string{"1", "day"})
 
 	output := stdout.String()
 	if !strings.Contains(output, "today entry") {
@@ -210,7 +210,7 @@ func TestHandleLastCommand_InvalidNumber(t *testing.T) {
 	defer ResetDeps()
 
 	// Invalid number (not a number)
-	handleLastCommand([]string{"abc", "days"})
+	handleLastCommand(lastCmd, []string{"abc", "days"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for invalid number")
@@ -243,7 +243,7 @@ func TestHandleLastCommand_WrongKeyword(t *testing.T) {
 	defer ResetDeps()
 
 	// Wrong keyword (weeks instead of days)
-	handleLastCommand([]string{"7", "weeks"})
+	handleLastCommand(lastCmd, []string{"7", "weeks"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for wrong keyword")
@@ -276,7 +276,7 @@ func TestHandleLastCommand_NegativeNumber(t *testing.T) {
 	defer ResetDeps()
 
 	// Negative number
-	handleLastCommand([]string{"-7", "days"})
+	handleLastCommand(lastCmd, []string{"-7", "days"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for negative number")
@@ -306,7 +306,7 @@ func TestHandleLastCommand_ZeroDays(t *testing.T) {
 	defer ResetDeps()
 
 	// Zero days
-	handleLastCommand([]string{"0", "days"})
+	handleLastCommand(lastCmd, []string{"0", "days"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for zero days")
@@ -336,7 +336,7 @@ func TestHandleLastCommand_MissingKeyword(t *testing.T) {
 	defer ResetDeps()
 
 	// Missing 'days' keyword (only number)
-	handleLastCommand([]string{"7"})
+	handleLastCommand(lastCmd, []string{"7"})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for missing keyword")
@@ -378,7 +378,7 @@ func TestHandleLastCommand_ExtraWhitespace(t *testing.T) {
 	defer ResetDeps()
 
 	// Test with extra spaces in args (should be handled by string joining)
-	handleLastCommand([]string{"7", "days"})
+	handleLastCommand(lastCmd, []string{"7", "days"})
 
 	output := stdout.String()
 	// Should successfully parse and show entry
@@ -417,7 +417,7 @@ func TestHandleLastCommand_LargeNumber(t *testing.T) {
 	defer ResetDeps()
 
 	// Test with large number (365 days = 1 year)
-	handleLastCommand([]string{"365", "days"})
+	handleLastCommand(lastCmd, []string{"365", "days"})
 
 	output := stdout.String()
 	// Should successfully parse and show entry from 300 days ago
@@ -483,7 +483,7 @@ func TestHandleLastCommand_EmptyArgs(t *testing.T) {
 	defer ResetDeps()
 
 	// Empty args (edge case - should fail)
-	handleLastCommand([]string{})
+	handleLastCommand(lastCmd, []string{})
 
 	if !exitCalled {
 		t.Error("Expected exit to be called for empty args")

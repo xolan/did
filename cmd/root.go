@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/entry"
+	"github.com/xolan/did/internal/filter"
 	"github.com/xolan/did/internal/storage"
 	"github.com/xolan/did/internal/timeutil"
 )
@@ -66,7 +67,7 @@ Projects and Tags:
 
 		if len(args) == 0 {
 			// No args: list today's entries
-			listEntries("today", timeutil.Today)
+			listEntries(cmd, "today", timeutil.Today)
 			return
 		}
 
@@ -81,7 +82,7 @@ Projects and Tags:
 				// Successfully parsed as a date - list entries for that day
 				endDate := timeutil.EndOfDay(date)
 				periodDesc := formatDateRangeForDisplay(date, endDate)
-				listEntriesForRange(periodDesc, date, endDate)
+				listEntriesForRange(cmd, periodDesc, date, endDate)
 				return
 			} else {
 				// Single argument without 'for' keyword failed to parse as date
@@ -113,7 +114,7 @@ var yCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
-		listEntries("yesterday", timeutil.Yesterday)
+		listEntries(cmd, "yesterday", timeutil.Yesterday)
 	},
 }
 
@@ -125,7 +126,7 @@ var wCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
-		listEntries("this week", timeutil.ThisWeek)
+		listEntries(cmd, "this week", timeutil.ThisWeek)
 	},
 }
 
@@ -137,7 +138,7 @@ var lwCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
-		listEntries("last week", timeutil.LastWeek)
+		listEntries(cmd, "last week", timeutil.LastWeek)
 	},
 }
 
@@ -311,13 +312,13 @@ func createEntry(args []string) {
 
 // listEntries reads and displays entries filtered by the given time range
 // This function accepts a function that returns start/end times for backward compatibility
-func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
+func listEntries(cmd *cobra.Command, period string, timeRangeFunc func() (time.Time, time.Time)) {
 	start, end := timeRangeFunc()
-	listEntriesForRange(period, start, end)
+	listEntriesForRange(cmd, period, start, end)
 }
 
-// listEntriesForRange reads and displays entries filtered by explicit start/end times
-func listEntriesForRange(period string, start, end time.Time) {
+// listEntriesForRange reads and displays entries filtered by explicit start/end times and optional filters
+func listEntriesForRange(cmd *cobra.Command, period string, start, end time.Time) {
 	storagePath, err := deps.StoragePath()
 	if err != nil {
 		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
@@ -353,6 +354,19 @@ func listEntriesForRange(period string, start, end time.Time) {
 		if timeutil.IsInRange(e.Timestamp, start, end) {
 			filtered = append(filtered, e)
 		}
+	}
+
+	// Get filter flags and apply project/tag filters
+	projectFilter, _ := cmd.Root().PersistentFlags().GetString("project")
+	tagFilters, _ := cmd.Root().PersistentFlags().GetStringSlice("tag")
+
+	// Create filter and apply if any filters are set
+	f := filter.NewFilter("", projectFilter, tagFilters)
+	if !f.IsEmpty() {
+		filtered = filter.FilterEntries(filtered, f)
+
+		// Update period description to show active filters
+		period = buildPeriodWithFilters(period, projectFilter, tagFilters)
 	}
 
 	if len(filtered) == 0 {
@@ -404,6 +418,24 @@ func formatDateRangeForDisplay(start, end time.Time) string {
 	return fmt.Sprintf("%s - %s",
 		start.Format("Jan 2, 2006"),
 		end.Format("Jan 2, 2006"))
+}
+
+// buildPeriodWithFilters appends filter information to the period description
+// Example: "today" -> "today (@acme #bugfix)"
+func buildPeriodWithFilters(period, project string, tags []string) string {
+	if project == "" && len(tags) == 0 {
+		return period
+	}
+
+	var filters []string
+	if project != "" {
+		filters = append(filters, "@"+project)
+	}
+	for _, tag := range tags {
+		filters = append(filters, "#"+tag)
+	}
+
+	return fmt.Sprintf("%s (%s)", period, strings.Join(filters, " "))
 }
 
 // formatCorruptionWarning formats a ParseWarning into a human-readable string

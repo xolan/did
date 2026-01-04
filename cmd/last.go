@@ -22,7 +22,7 @@ Examples:
   did last 1 day      # List entries for today only`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		handleLastCommand(args)
+		handleLastCommand(cmd, args)
 	},
 }
 
@@ -31,7 +31,7 @@ func init() {
 }
 
 // handleLastCommand processes the 'last' command arguments and lists entries
-func handleLastCommand(args []string) {
+func handleLastCommand(cmd *cobra.Command, args []string) {
 	// Join all args to form the full expression
 	// Need to prepend "last" since it's consumed by the command framework
 	expression := "last " + strings.Join(args, " ")
@@ -54,5 +54,5 @@ func handleLastCommand(args []string) {
 	periodDesc := formatDateRangeForDisplay(startDate, endDate)
 
 	// List entries using the custom time range
-	listEntriesForRange(periodDesc, startDate, endDate)
+	listEntriesForRange(cmd, periodDesc, startDate, endDate)
 }

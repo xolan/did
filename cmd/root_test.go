@@ -200,7 +200,7 @@ func TestListEntries_NoEntries(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		return now, now.Add(24 * time.Hour)
 	})
@@ -229,7 +229,7 @@ func TestListEntries_WithEntries(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
@@ -615,7 +615,7 @@ func TestListEntries_StoragePathError(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		return now, now.Add(24 * time.Hour)
 	})
@@ -645,7 +645,7 @@ invalid json line
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
 		return start, end
@@ -741,7 +741,7 @@ func TestListEntries_ReadEntriesError(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		return now, now.Add(24 * time.Hour)
 	})
@@ -1640,7 +1640,7 @@ func TestListEntries_WithProject(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
@@ -1681,7 +1681,7 @@ func TestListEntries_WithTags(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
@@ -1726,7 +1726,7 @@ func TestListEntries_WithProjectAndTags(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
@@ -1773,7 +1773,7 @@ func TestListEntries_BackwardCompatibility_NoProjectOrTags(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		now := time.Now()
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
@@ -1845,7 +1845,7 @@ func TestListEntries_MixedEntriesWithAndWithoutProjectTags(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	listEntries("today", func() (time.Time, time.Time) {
+	listEntries(rootCmd, "today", func() (time.Time, time.Time) {
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		end := start.Add(24 * time.Hour)
 		return start, end

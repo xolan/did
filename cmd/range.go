@@ -24,7 +24,7 @@ Examples:
   did from 2024-01-15 to 2024-01-15    # List entries for a single day`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		handleFromCommand(args)
+		handleFromCommand(cmd, args)
 	},
 }
 
@@ -33,7 +33,7 @@ func init() {
 }
 
 // handleFromCommand processes the 'from' command arguments and lists entries
-func handleFromCommand(args []string) {
+func handleFromCommand(cmd *cobra.Command, args []string) {
 	// Parse arguments: expect "from START to END" or just "START to END"
 	// Since the command is "did from ...", the first arg is already after "from"
 
@@ -125,5 +125,5 @@ func handleFromCommand(args []string) {
 	periodDesc := formatDateRangeForDisplay(startDate, endDate)
 
 	// List entries using the custom time range
-	listEntriesForRange(periodDesc, startDate, endDate)
+	listEntriesForRange(cmd, periodDesc, startDate, endDate)
 }
