@@ -112,7 +112,7 @@ func runReport(cmd *cobra.Command, args []string) {
 
 	if groupBy == "tag" {
 		// Grouped by tag report (subtask 3.2)
-		_, _ = fmt.Fprintln(deps.Stdout, "Grouped by tag report - to be implemented")
+		runGroupByTagReport(cmd)
 		return
 	}
 
@@ -663,4 +663,210 @@ func runGroupByProjectReport(cmd *cobra.Command) {
 		pluralize("entry", grandTotalEntries),
 		len(groups),
 		pluralize("project", len(groups)))
+}
+
+// runGroupByTagReport generates a report showing hours grouped by all tags
+func runGroupByTagReport(cmd *cobra.Command) {
+	// Parse date filtering flags
+	fromStr, _ := cmd.Flags().GetString("from")
+	toStr, _ := cmd.Flags().GetString("to")
+	lastDays, _ := cmd.Flags().GetInt("last")
+
+	// Validate flag combinations
+	if lastDays > 0 && (fromStr != "" || toStr != "") {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Cannot use --last with --from or --to")
+		_, _ = fmt.Fprintln(deps.Stderr, "Use either --last N or --from/--to, not both")
+		deps.Exit(1)
+		return
+	}
+
+	// Parse date range
+	var startDate, endDate time.Time
+	var hasDateFilter bool
+
+	if lastDays > 0 {
+		// Use relative days
+		now := time.Now()
+		endDate = timeutil.EndOfDay(now)
+		startDate = timeutil.StartOfDay(now.AddDate(0, 0, -(lastDays - 1)))
+		hasDateFilter = true
+	} else if fromStr != "" || toStr != "" {
+		// Use explicit date range
+		hasDateFilter = true
+
+		// Parse from date
+		if fromStr != "" {
+			var err error
+			startDate, err = timeutil.ParseDate(fromStr)
+			if err != nil {
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --from date: %v\n", err)
+				deps.Exit(1)
+				return
+			}
+		} else {
+			// No from date: use the beginning of time
+			startDate = time.Time{}
+		}
+
+		// Parse to date
+		if toStr != "" {
+			var err error
+			toDate, err := timeutil.ParseDate(toStr)
+			if err != nil {
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --to date: %v\n", err)
+				deps.Exit(1)
+				return
+			}
+			endDate = timeutil.EndOfDay(toDate)
+		} else {
+			// No to date: use now
+			endDate = timeutil.EndOfDay(time.Now())
+		}
+	}
+
+	// Get storage path
+	storagePath, err := deps.StoragePath()
+	if err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		deps.Exit(1)
+		return
+	}
+
+	// Read all entries from storage
+	result, err := storage.ReadEntriesWithWarnings(storagePath)
+	if err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to read entries from storage")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file exists and is readable: %s\n", storagePath)
+		deps.Exit(1)
+		return
+	}
+
+	// Display warnings about corrupted lines to stderr
+	if len(result.Warnings) > 0 {
+		_, _ = fmt.Fprintf(deps.Stderr, "Warning: Found %d corrupted line(s) in storage file:\n", len(result.Warnings))
+		for _, warning := range result.Warnings {
+			_, _ = fmt.Fprintln(deps.Stderr, formatCorruptionWarning(warning))
+		}
+		_, _ = fmt.Fprintln(deps.Stderr)
+	}
+
+	// Filter out soft-deleted entries
+	var activeEntries []entry.Entry
+	for _, e := range result.Entries {
+		if e.DeletedAt == nil {
+			activeEntries = append(activeEntries, e)
+		}
+	}
+
+	// Apply date filtering if specified
+	filtered := activeEntries
+	if hasDateFilter {
+		dateFiltered := make([]entry.Entry, 0)
+		for _, e := range filtered {
+			if timeutil.IsInRange(e.Timestamp, startDate, endDate) {
+				dateFiltered = append(dateFiltered, e)
+			}
+		}
+		filtered = dateFiltered
+	}
+
+	// Check if any results found
+	if len(filtered) == 0 {
+		if hasDateFilter {
+			_, _ = fmt.Fprintln(deps.Stdout, "No entries found in the specified date range")
+		} else {
+			_, _ = fmt.Fprintln(deps.Stdout, "No entries found")
+		}
+		return
+	}
+
+	// Group entries by tag
+	// Note: Entries with multiple tags will contribute to each tag group
+	type TagGroup struct {
+		Name         string
+		TotalMinutes int
+		EntryCount   int
+	}
+
+	tagGroups := make(map[string]*TagGroup)
+
+	for _, e := range filtered {
+		// If entry has no tags, add to "(no tags)" group
+		if len(e.Tags) == 0 {
+			tagName := "(no tags)"
+			if _, exists := tagGroups[tagName]; !exists {
+				tagGroups[tagName] = &TagGroup{Name: tagName}
+			}
+			tagGroups[tagName].TotalMinutes += e.DurationMinutes
+			tagGroups[tagName].EntryCount++
+		} else {
+			// Entry has tags - add to each tag group
+			for _, tag := range e.Tags {
+				if _, exists := tagGroups[tag]; !exists {
+					tagGroups[tag] = &TagGroup{Name: tag}
+				}
+				tagGroups[tag].TotalMinutes += e.DurationMinutes
+				tagGroups[tag].EntryCount++
+			}
+		}
+	}
+
+	// Convert map to slice for sorting
+	var groups []*TagGroup
+	for _, group := range tagGroups {
+		groups = append(groups, group)
+	}
+
+	// Sort by total time (descending)
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].TotalMinutes > groups[j].TotalMinutes
+	})
+
+	// Calculate grand totals
+	// Note: Because entries with multiple tags contribute to multiple groups,
+	// we need to count unique entries, not sum up entry counts from groups
+	grandTotalMinutes := 0
+	grandTotalEntries := len(filtered)
+	for _, e := range filtered {
+		grandTotalMinutes += e.DurationMinutes
+	}
+
+	// Display results
+	reportHeader := "Report grouped by tag"
+	if hasDateFilter {
+		if lastDays > 0 {
+			reportHeader += fmt.Sprintf(" (last %d %s)", lastDays, pluralize("day", lastDays))
+		} else {
+			reportHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
+		}
+	}
+	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", reportHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+
+	for _, group := range groups {
+		// Format tag name with special handling for "(no tags)"
+		tagDisplay := group.Name
+		if group.Name == "(no tags)" {
+			tagDisplay = group.Name // Keep as is, no # prefix
+		} else {
+			tagDisplay = "#" + group.Name
+		}
+
+		_, _ = fmt.Fprintf(deps.Stdout, "%-30s  %10s  (%d %s)\n",
+			tagDisplay,
+			formatDuration(group.TotalMinutes),
+			group.EntryCount,
+			pluralize("entry", group.EntryCount))
+	}
+
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintf(deps.Stdout, "Grand Total: %s (%d %s across %d %s)\n",
+		formatDuration(grandTotalMinutes),
+		grandTotalEntries,
+		pluralize("entry", grandTotalEntries),
+		len(groups),
+		pluralize("tag", len(groups)))
 }
