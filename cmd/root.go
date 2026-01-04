@@ -368,7 +368,14 @@ func listEntriesForRange(cmd *cobra.Command, period string, start, end time.Time
 		_, _ = fmt.Fprintln(deps.Stderr)
 	}
 
-	entries := result.Entries
+	// Filter out soft-deleted entries (where DeletedAt is not nil)
+	var activeEntries []entry.Entry
+	for _, e := range result.Entries {
+		if e.DeletedAt == nil {
+			activeEntries = append(activeEntries, e)
+		}
+	}
+	entries := activeEntries
 
 	// Filter entries by time range
 	var filtered []entry.Entry
@@ -603,10 +610,21 @@ func editEntry(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	entries := result.Entries
+	allEntries := result.Entries
 
-	// Check if any entries exist
-	if len(entries) == 0 {
+	// Filter to active entries only and create index mapping
+	// Users should only be able to edit active (non-deleted) entries
+	var activeEntries []entry.Entry
+	var storageIndices []int // Maps active entry index to storage index
+	for i, e := range allEntries {
+		if e.DeletedAt == nil {
+			activeEntries = append(activeEntries, e)
+			storageIndices = append(storageIndices, i)
+		}
+	}
+
+	// Check if any active entries exist
+	if len(activeEntries) == 0 {
 		_, _ = fmt.Fprintln(deps.Stderr, "Error: No entries found to edit")
 		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Create an entry first with 'did <description> for <duration>'")
 		_, _ = fmt.Fprintln(deps.Stderr, "Example: did feature X for 2h")
@@ -614,20 +632,23 @@ func editEntry(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Convert 1-based user index to 0-based internal index
-	internalIndex := userIndex - 1
+	// Convert 1-based user index to 0-based active entry index
+	activeIndex := userIndex - 1
 
-	// Validate index is in range
-	if internalIndex < 0 || internalIndex >= len(entries) {
+	// Validate index is in range of active entries
+	if activeIndex < 0 || activeIndex >= len(activeEntries) {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index %d is out of range\n", userIndex)
-		_, _ = fmt.Fprintf(deps.Stderr, "Valid range: 1-%d (%d %s available)\n", len(entries), len(entries), pluralize("entry", len(entries)))
+		_, _ = fmt.Fprintf(deps.Stderr, "Valid range: 1-%d (%d %s available)\n", len(activeEntries), len(activeEntries), pluralize("entry", len(activeEntries)))
 		_, _ = fmt.Fprintln(deps.Stderr, "Hint: List entries with 'did' to see all indices")
 		deps.Exit(1)
 		return
 	}
 
-	// Get the entry to modify
-	e := entries[internalIndex]
+	// Get the entry to modify (from active entries)
+	e := activeEntries[activeIndex]
+
+	// Get the actual storage index for this entry
+	storageIndex := storageIndices[activeIndex]
 
 	// Update description if provided
 	if newDescription != "" {
@@ -679,7 +700,7 @@ func editEntry(cmd *cobra.Command, args []string) {
 	// Preserve original timestamp (already unchanged in e)
 
 	// Save the updated entry
-	if err := storage.UpdateEntry(storagePath, internalIndex, e); err != nil {
+	if err := storage.UpdateEntry(storagePath, storageIndex, e); err != nil {
 		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to save updated entry to storage")
 		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
 		_, _ = fmt.Fprintf(deps.Stderr, "Hint: Check that file is writable: %s\n", storagePath)
