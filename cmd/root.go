@@ -61,6 +61,9 @@ Projects and Tags:
   did API work @client #backend #api for 2h     Combine project with multiple tags`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		args = parseShorthandFilters(cmd, args)
+
 		if len(args) == 0 {
 			// No args: list today's entries
 			listEntries("today", timeutil.Today)
@@ -108,6 +111,8 @@ var yCmd = &cobra.Command{
 	Short: "List yesterday's entries",
 	Long:  `List all time tracking entries logged yesterday.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
 		listEntries("yesterday", timeutil.Yesterday)
 	},
 }
@@ -118,6 +123,8 @@ var wCmd = &cobra.Command{
 	Short: "List this week's entries",
 	Long:  `List all time tracking entries logged this week (Monday-Sunday).`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
 		listEntries("this week", timeutil.ThisWeek)
 	},
 }
@@ -128,6 +135,8 @@ var lwCmd = &cobra.Command{
 	Short: "List last week's entries",
 	Long:  `List all time tracking entries logged last week (Monday-Sunday).`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
 		listEntries("last week", timeutil.LastWeek)
 	},
 }
@@ -191,6 +200,35 @@ func SetVersionInfo(version, commit, date string) {
 // Execute runs the root command
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+// parseShorthandFilters parses @project and #tag shorthand syntax from args.
+// It extracts shorthand filters, sets the corresponding flags, and returns the remaining args.
+// Example: ["@acme", "#bugfix", "y"] -> flags set, returns ["y"]
+func parseShorthandFilters(cmd *cobra.Command, args []string) []string {
+	var remainingArgs []string
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "@") {
+			// Extract project (remove @ prefix)
+			project := strings.TrimPrefix(arg, "@")
+			if project != "" {
+				_ = cmd.Root().PersistentFlags().Set("project", project)
+			}
+		} else if strings.HasPrefix(arg, "#") {
+			// Extract tag (remove # prefix)
+			tag := strings.TrimPrefix(arg, "#")
+			if tag != "" {
+				// cobra StringSlice flags append when Set is called multiple times
+				_ = cmd.Root().PersistentFlags().Set("tag", tag)
+			}
+		} else {
+			// Not a shorthand filter, keep in remaining args
+			remainingArgs = append(remainingArgs, arg)
+		}
+	}
+
+	return remainingArgs
 }
 
 // createEntry parses arguments and creates a new time tracking entry

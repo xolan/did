@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/storage"
 )
@@ -2425,5 +2426,171 @@ func TestEditEntry_Integration_EditBothDescriptionAndDurationWithProjectTags(t *
 	}
 	if entries[0].DurationMinutes != 150 {
 		t.Errorf("Expected duration 150 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestParseShorthandFilters(t *testing.T) {
+	tests := []struct {
+		name              string
+		args              []string
+		expectedProject   string
+		expectedTags      []string
+		expectedRemaining []string
+	}{
+		{
+			name:              "empty args",
+			args:              []string{},
+			expectedProject:   "",
+			expectedTags:      []string{},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "single @project",
+			args:              []string{"@acme"},
+			expectedProject:   "acme",
+			expectedTags:      []string{},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "single #tag",
+			args:              []string{"#bugfix"},
+			expectedProject:   "",
+			expectedTags:      []string{"bugfix"},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "multiple #tags",
+			args:              []string{"#bugfix", "#urgent"},
+			expectedProject:   "",
+			expectedTags:      []string{"bugfix", "urgent"},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "@project and #tag",
+			args:              []string{"@acme", "#bugfix"},
+			expectedProject:   "acme",
+			expectedTags:      []string{"bugfix"},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "@project, multiple #tags",
+			args:              []string{"@client", "#urgent", "#backend"},
+			expectedProject:   "client",
+			expectedTags:      []string{"urgent", "backend"},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "shorthand with non-shorthand args",
+			args:              []string{"@acme", "y"},
+			expectedProject:   "acme",
+			expectedTags:      []string{},
+			expectedRemaining: []string{"y"},
+		},
+		{
+			name:              "mixed order",
+			args:              []string{"y", "@client", "#urgent"},
+			expectedProject:   "client",
+			expectedTags:      []string{"urgent"},
+			expectedRemaining: []string{"y"},
+		},
+		{
+			name:              "non-shorthand only",
+			args:              []string{"y", "w"},
+			expectedProject:   "",
+			expectedTags:      []string{},
+			expectedRemaining: []string{"y", "w"},
+		},
+		{
+			name:              "empty @ prefix",
+			args:              []string{"@"},
+			expectedProject:   "",
+			expectedTags:      []string{},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "empty # prefix",
+			args:              []string{"#"},
+			expectedProject:   "",
+			expectedTags:      []string{},
+			expectedRemaining: []string{},
+		},
+		{
+			name:              "multiple @projects (last wins)",
+			args:              []string{"@project1", "@project2"},
+			expectedProject:   "project2",
+			expectedTags:      []string{},
+			expectedRemaining: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh command with persistent flags
+			cmd := &cobra.Command{}
+			cmd.PersistentFlags().String("project", "", "Filter entries by project")
+			cmd.PersistentFlags().StringSlice("tag", []string{}, "Filter entries by tag")
+
+			remaining := parseShorthandFilters(cmd, tt.args)
+
+			// Check project flag
+			project, _ := cmd.PersistentFlags().GetString("project")
+			if project != tt.expectedProject {
+				t.Errorf("Expected project %q, got %q", tt.expectedProject, project)
+			}
+
+			// Check tag flags
+			tags, _ := cmd.PersistentFlags().GetStringSlice("tag")
+			if len(tags) != len(tt.expectedTags) {
+				t.Errorf("Expected %d tags, got %d", len(tt.expectedTags), len(tags))
+			} else {
+				for i, expectedTag := range tt.expectedTags {
+					if tags[i] != expectedTag {
+						t.Errorf("Expected tag[%d] %q, got %q", i, expectedTag, tags[i])
+					}
+				}
+			}
+
+			// Check remaining args
+			if len(remaining) != len(tt.expectedRemaining) {
+				t.Errorf("Expected %d remaining args, got %d", len(tt.expectedRemaining), len(remaining))
+			} else {
+				for i, expectedArg := range tt.expectedRemaining {
+					if remaining[i] != expectedArg {
+						t.Errorf("Expected remaining[%d] %q, got %q", i, expectedArg, remaining[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestParseShorthandFilters_PreservesExistingFlags(t *testing.T) {
+	// Test that shorthand syntax combines with existing --tag flags
+	cmd := &cobra.Command{}
+	cmd.PersistentFlags().String("project", "", "Filter entries by project")
+	cmd.PersistentFlags().StringSlice("tag", []string{}, "Filter entries by tag")
+
+	// Set existing --tag flag value
+	_ = cmd.PersistentFlags().Set("tag", "existing")
+
+	// Parse shorthand with additional tag
+	remaining := parseShorthandFilters(cmd, []string{"#new", "y"})
+
+	// Check that both tags are present
+	tags, _ := cmd.PersistentFlags().GetStringSlice("tag")
+	if len(tags) != 2 {
+		t.Errorf("Expected 2 tags (existing + new), got %d: %v", len(tags), tags)
+	}
+
+	expectedTags := map[string]bool{"existing": true, "new": true}
+	for _, tag := range tags {
+		if !expectedTags[tag] {
+			t.Errorf("Unexpected tag: %q", tag)
+		}
+	}
+
+	// Check remaining args
+	if len(remaining) != 1 || remaining[0] != "y" {
+		t.Errorf("Expected remaining args ['y'], got %v", remaining)
 	}
 }
