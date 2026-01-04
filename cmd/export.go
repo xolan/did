@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -387,7 +390,55 @@ func exportCSV(cmd *cobra.Command) {
 		entries = filter.FilterEntries(entries, f)
 	}
 
-	// TODO: Implement CSV output (placeholder for now)
-	_, _ = fmt.Fprintln(deps.Stderr, "CSV export not yet implemented")
-	deps.Exit(1)
+	// Create CSV writer
+	writer := csv.NewWriter(deps.Stdout)
+	defer writer.Flush()
+
+	// Write CSV headers
+	headers := []string{"date", "description", "duration_minutes", "duration_hours", "project", "tags"}
+	if err := writer.Write(headers); err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to write CSV headers")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		deps.Exit(1)
+		return
+	}
+
+	// Write each entry as a CSV row
+	for _, e := range entries {
+		// Format date as YYYY-MM-DD
+		date := e.Timestamp.Format("2006-01-02")
+
+		// Format duration in hours as decimal
+		durationHours := strconv.FormatFloat(float64(e.DurationMinutes)/60.0, 'f', 2, 64)
+
+		// Format tags as semicolon-separated string
+		tagsStr := strings.Join(e.Tags, ";")
+
+		// Create row
+		row := []string{
+			date,
+			e.Description,
+			strconv.Itoa(e.DurationMinutes),
+			durationHours,
+			e.Project,
+			tagsStr,
+		}
+
+		// Write row
+		if err := writer.Write(row); err != nil {
+			_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to write CSV row")
+			_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+			deps.Exit(1)
+			return
+		}
+	}
+
+	// Ensure all buffered data is written
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to flush CSV output")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		deps.Exit(1)
+		return
+	}
 }
