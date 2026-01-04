@@ -1,6 +1,10 @@
 package filter
 
-import "github.com/xolan/did/internal/entry"
+import (
+	"strings"
+
+	"github.com/xolan/did/internal/entry"
+)
 
 // Filter represents search and filtering criteria for time tracking entries.
 // All filter fields are optional - empty values match all entries.
@@ -39,6 +43,15 @@ func FilterEntries(entries []entry.Entry, f *Filter) []entry.Entry {
 		}
 	}
 	return filtered
+}
+
+// MatchesKeyword returns true if the keyword is found in the entry's description (case-insensitive).
+// An empty keyword matches all entries.
+func (f *Filter) MatchesKeyword(e entry.Entry) bool {
+	if f.Keyword == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(e.Description), strings.ToLower(f.Keyword))
 }
 
 // Matches will be implemented in subsequent subtasks
