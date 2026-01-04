@@ -65,7 +65,7 @@ Projects and Tags:
 			} else {
 				// Single argument without 'for' keyword failed to parse as date
 				// Show helpful error message about date format OR entry creation
-				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid date or missing 'for' keyword\n")
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
 				_, _ = fmt.Fprintln(deps.Stderr)
 				_, _ = fmt.Fprintln(deps.Stderr, "If querying a date, use format YYYY-MM-DD or DD/MM/YYYY:")
 				_, _ = fmt.Fprintln(deps.Stderr, "  did 2024-01-15")

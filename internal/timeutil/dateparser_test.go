@@ -449,3 +449,107 @@ func TestParseRelativeDays_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDate_PartialDateErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedError string
+	}{
+		{
+			name:          "year only",
+			input:         "2024",
+			expectedError: "incomplete date '2024': missing month and day",
+		},
+		{
+			name:          "ISO partial - missing day",
+			input:         "2024-01",
+			expectedError: "incomplete date '2024-01': missing day",
+		},
+		{
+			name:          "ISO partial - missing year",
+			input:         "01-15",
+			expectedError: "incomplete date '01-15': missing year",
+		},
+		{
+			name:          "European partial - missing year",
+			input:         "15/01",
+			expectedError: "incomplete date '15/01': missing year",
+		},
+		{
+			name:          "empty string",
+			input:         "",
+			expectedError: "date cannot be empty",
+		},
+		{
+			name:          "invalid format",
+			input:         "invalid",
+			expectedError: "invalid date format 'invalid'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseDate(tt.input)
+			if err == nil {
+				t.Fatalf("ParseDate(%q) expected error, got nil", tt.input)
+			}
+			if !containsSubstring(err.Error(), tt.expectedError) {
+				t.Errorf("ParseDate(%q) error = %q, expected to contain %q",
+					tt.input, err.Error(), tt.expectedError)
+			}
+		})
+	}
+}
+
+func TestParseRelativeDays_ErrorMessages(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedError string
+	}{
+		{
+			name:          "empty string",
+			input:         "",
+			expectedError: "relative date cannot be empty",
+		},
+		{
+			name:          "invalid format",
+			input:         "last week",
+			expectedError: "invalid format 'last week'",
+		},
+		{
+			name:          "missing last",
+			input:         "7 days",
+			expectedError: "invalid format '7 days'",
+		},
+		{
+			name:          "missing days",
+			input:         "last 7",
+			expectedError: "invalid format 'last 7'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := ParseRelativeDays(tt.input)
+			if err == nil {
+				t.Fatalf("ParseRelativeDays(%q) expected error, got nil", tt.input)
+			}
+			if !containsSubstring(err.Error(), tt.expectedError) {
+				t.Errorf("ParseRelativeDays(%q) error = %q, expected to contain %q",
+					tt.input, err.Error(), tt.expectedError)
+			}
+		})
+	}
+}
+
+// containsSubstring checks if s contains substr
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
