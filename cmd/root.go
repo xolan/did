@@ -22,13 +22,16 @@ Usage:
   did y                                         List yesterday's entries
   did w                                         List this week's entries
   did lw                                        List last week's entries
-  did 2024-01-15                                List entries for a specific date
-  did from 2024-01-01 to 2024-01-31             List entries for a date range
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
   did delete <index>                            Delete an entry (with confirmation)
   did validate                                  Check storage file health
   did restore [n]                               Restore from backup (default: most recent)
+
+Date Query Commands:
+  did 2024-01-15                                List entries for a specific date
+  did from 2024-01-01 to 2024-01-31             List entries for a date range
+  did last 7 days                               List entries from the past 7 days
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
