@@ -73,6 +73,14 @@ Export Commands:
   did export csv @acme #review                  Export with project and tag filters
   did export csv --last 30 --project acme       Export last 30 days for project
 
+Report Commands:
+  did report @project                           Show all entries for a specific project with totals
+  did report #tag                               Show all entries with a specific tag
+  did report --by project                       Show hours grouped by all projects
+  did report --by tag                           Show hours grouped by all tags
+  did report @project --last 7                  Project report for last 7 days
+  did report --by project --from 2024-01-01 --to 2024-01-31    Project breakdown for date range
+
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
 
