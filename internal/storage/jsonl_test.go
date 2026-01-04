@@ -1765,7 +1765,7 @@ func TestCleanupOldDeleted_WithOldDeleted(t *testing.T) {
 	tmpFile := createTempFile(t, "")
 
 	// Create entries with old DeletedAt timestamps
-	oldTime := time.Now().Add(-10 * 24 * time.Hour) // 10 days ago
+	oldTime := time.Now().Add(-10 * 24 * time.Hour)   // 10 days ago
 	recentTime := time.Now().Add(-3 * 24 * time.Hour) // 3 days ago
 
 	entries := []entry.Entry{

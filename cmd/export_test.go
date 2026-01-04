@@ -2670,7 +2670,7 @@ func TestExportJSON_Integration_ComplexFilteringWithMultipleMatches(t *testing.T
 		}
 		if result.Entries[1].Description != "Backend API feature 3" {
 			t.Errorf("Expected second entry to be 'Backend API feature 3', got %q", result.Entries[1].Description)
-	}
+		}
 	}
 
 	// Verify complete metadata

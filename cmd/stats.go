@@ -113,6 +113,18 @@ func runStats(cmd *cobra.Command, args []string) {
 
 	// Display statistics
 	displayStatistics(statistics)
+
+	// Calculate and display project breakdown if projects exist
+	projectBreakdown := stats.CalculateProjectBreakdown(activeEntries, start, end)
+	if len(projectBreakdown) > 0 {
+		displayProjectBreakdown(projectBreakdown)
+	}
+
+	// Calculate and display tag breakdown if tags exist
+	tagBreakdown := stats.CalculateTagBreakdown(activeEntries, start, end)
+	if len(tagBreakdown) > 0 {
+		displayTagBreakdown(tagBreakdown)
+	}
 }
 
 // displayStatistics formats and displays statistics to stdout
@@ -129,6 +141,52 @@ func displayStatistics(stats stats.Statistics) {
 
 	// Display days with entries (useful context)
 	_, _ = fmt.Fprintf(deps.Stdout, "Days Tracked:    %d %s\n", stats.DaysWithEntries, pluralize("day", stats.DaysWithEntries))
+
+	_, _ = fmt.Fprintln(deps.Stdout)
+}
+
+// displayProjectBreakdown formats and displays project breakdown to stdout
+func displayProjectBreakdown(breakdowns []stats.ProjectBreakdown) {
+	_, _ = fmt.Fprintln(deps.Stdout, "By Project:")
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
+
+	for _, breakdown := range breakdowns {
+		// Format project name with special handling for "(no project)"
+		projectDisplay := breakdown.Project
+		if breakdown.Project != "(no project)" {
+			projectDisplay = "@" + breakdown.Project
+		}
+
+		_, _ = fmt.Fprintf(deps.Stdout, "  %-28s  %10s  (%d %s)\n",
+			projectDisplay,
+			formatDuration(breakdown.TotalMinutes),
+			breakdown.EntryCount,
+			pluralize("entry", breakdown.EntryCount))
+	}
+
+	_, _ = fmt.Fprintln(deps.Stdout)
+}
+
+// displayTagBreakdown formats and displays tag breakdown to stdout
+func displayTagBreakdown(breakdowns []stats.TagBreakdown) {
+	_, _ = fmt.Fprintln(deps.Stdout, "By Tag:")
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
+
+	for _, breakdown := range breakdowns {
+		// Format tag name with special handling for "(no tags)"
+		tagDisplay := breakdown.Tag
+		if breakdown.Tag != "(no tags)" {
+			tagDisplay = "#" + breakdown.Tag
+		}
+
+		_, _ = fmt.Fprintf(deps.Stdout, "  %-28s  %10s  (%d %s)\n",
+			tagDisplay,
+			formatDuration(breakdown.TotalMinutes),
+			breakdown.EntryCount,
+			pluralize("entry", breakdown.EntryCount))
+	}
 
 	_, _ = fmt.Fprintln(deps.Stdout)
 }
