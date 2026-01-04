@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -184,4 +185,42 @@ func CalculateTagBreakdown(entries []entry.Entry, start, end time.Time) []TagBre
 // Returns the difference in minutes (positive if current > previous, negative if current < previous).
 func CompareStatistics(current, previous Statistics) int {
 	return current.TotalMinutes - previous.TotalMinutes
+}
+
+// FormatComparison formats the comparison between current and previous period.
+// diffMinutes is the difference returned by CompareStatistics (positive = increase, negative = decrease).
+// periodName should be "week" or "month" to indicate the comparison period.
+// Returns strings like "up 2h 30m from last week", "down 1h from last month", or "same as last week".
+func FormatComparison(diffMinutes int, periodName string) string {
+	if diffMinutes == 0 {
+		return fmt.Sprintf("same as last %s", periodName)
+	}
+
+	// Get absolute value for formatting
+	absDiff := diffMinutes
+	if absDiff < 0 {
+		absDiff = -absDiff
+	}
+
+	// Format duration
+	var duration string
+	if absDiff < 60 {
+		duration = fmt.Sprintf("%dm", absDiff)
+	} else {
+		hours := absDiff / 60
+		mins := absDiff % 60
+		if mins == 0 {
+			duration = fmt.Sprintf("%dh", hours)
+		} else {
+			duration = fmt.Sprintf("%dh %dm", hours, mins)
+		}
+	}
+
+	// Format direction
+	direction := "up"
+	if diffMinutes < 0 {
+		direction = "down"
+	}
+
+	return fmt.Sprintf("%s %s from last %s", direction, duration, periodName)
 }
