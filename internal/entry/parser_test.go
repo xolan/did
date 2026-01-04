@@ -220,3 +220,318 @@ func TestMaxDurationMinutes(t *testing.T) {
 		t.Errorf("MaxDurationMinutes = %d, expected %d (24 hours)", MaxDurationMinutes, expected)
 	}
 }
+
+// Helper function to compare string slices
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestParseProjectAndTags_NoProjectNoTags(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"simple description", "fix bug", "fix bug", "", nil},
+		{"description with spaces", "working on feature implementation", "working on feature implementation", "", nil},
+		{"single word", "meeting", "meeting", "", nil},
+		{"empty string", "", "", "", nil},
+		{"description with numbers", "fix bug 123", "fix bug 123", "", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_ProjectOnly(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"project at end", "fix bug @acme", "fix bug", "acme", nil},
+		{"project at start", "@acme fix bug", "fix bug", "acme", nil},
+		{"project in middle", "fix @acme bug", "fix bug", "acme", nil},
+		{"project only", "@project", "", "project", nil},
+		{"project with hyphens", "fix bug @my-project", "fix bug", "my-project", nil},
+		{"project with underscores", "fix bug @my_project", "fix bug", "my_project", nil},
+		{"project with numbers", "fix bug @project123", "fix bug", "project123", nil},
+		{"project with mixed chars", "fix bug @my-project_v2", "fix bug", "my-project_v2", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_SingleTag(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"tag at end", "fix bug #bugfix", "fix bug", "", []string{"bugfix"}},
+		{"tag at start", "#bugfix fix bug", "fix bug", "", []string{"bugfix"}},
+		{"tag in middle", "fix #bugfix bug", "fix bug", "", []string{"bugfix"}},
+		{"tag only", "#bugfix", "", "", []string{"bugfix"}},
+		{"tag with hyphens", "fix bug #bug-fix", "fix bug", "", []string{"bug-fix"}},
+		{"tag with underscores", "fix bug #bug_fix", "fix bug", "", []string{"bug_fix"}},
+		{"tag with numbers", "fix bug #v2", "fix bug", "", []string{"v2"}},
+		{"tag with mixed chars", "fix bug #bug-fix_v2", "fix bug", "", []string{"bug-fix_v2"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_MultipleTags(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"two tags at end", "fix bug #bugfix #urgent", "fix bug", "", []string{"bugfix", "urgent"}},
+		{"two tags at start", "#bugfix #urgent fix bug", "fix bug", "", []string{"bugfix", "urgent"}},
+		{"tags distributed", "fix #bugfix bug #urgent", "fix bug", "", []string{"bugfix", "urgent"}},
+		{"three tags", "work #feature #frontend #v2", "work", "", []string{"feature", "frontend", "v2"}},
+		{"only tags", "#tag1 #tag2 #tag3", "", "", []string{"tag1", "tag2", "tag3"}},
+		{"tags preserve order", "#first #second #third", "", "", []string{"first", "second", "third"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_ProjectAndTags(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"project and tag at end", "fix bug @acme #bugfix", "fix bug", "acme", []string{"bugfix"}},
+		{"project and tag at start", "@acme #bugfix fix bug", "fix bug", "acme", []string{"bugfix"}},
+		{"mixed order", "fix @acme bug #bugfix", "fix bug", "acme", []string{"bugfix"}},
+		{"project and multiple tags", "fix bug @acme #bugfix #urgent", "fix bug", "acme", []string{"bugfix", "urgent"}},
+		{"tag before project", "fix bug #bugfix @acme", "fix bug", "acme", []string{"bugfix"}},
+		{"interleaved", "@acme fix #bugfix bug #urgent", "fix bug", "acme", []string{"bugfix", "urgent"}},
+		{"only project and tags", "@acme #feature #urgent", "", "acme", []string{"feature", "urgent"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_MultipleProjects(t *testing.T) {
+	// When multiple @project tokens are found, the last one wins
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"two projects last wins", "fix bug @first @second", "fix bug", "second", nil},
+		{"three projects last wins", "@first fix @second bug @third", "fix bug", "third", nil},
+		{"projects with tags", "@first fix bug @second #urgent", "fix bug", "second", []string{"urgent"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_WhitespaceHandling(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"extra spaces between words", "fix   bug @acme", "fix bug", "acme", nil},
+		{"leading spaces", "  fix bug @acme", "fix bug", "acme", nil},
+		{"trailing spaces", "fix bug @acme  ", "fix bug", "acme", nil},
+		{"spaces around project", "fix   @acme   bug", "fix bug", "acme", nil},
+		{"spaces around tags", "fix   #tag1   bug   #tag2", "fix bug", "", []string{"tag1", "tag2"}},
+		{"tabs and spaces", "fix	bug @acme", "fix bug", "acme", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		// Special characters that should NOT be part of project/tag names
+		{"project with period after", "fix @acme.inc bug", "fix .inc bug", "acme", nil},
+		{"tag with period after", "fix #v1.0 bug", "fix .0 bug", "", []string{"v1"}},
+
+		// Email-like patterns (@ in email should only match valid project name part)
+		{"email pattern", "sent email user@example.com", "sent email user.com", "example", nil},
+
+		// Hash in non-tag context (only alphanumeric after # counts as tag)
+		{"hash with space after", "fix # bug", "fix # bug", "", nil},
+		{"at with space after", "fix @ bug", "fix @ bug", "", nil},
+
+		// Numbers are valid tag names, so #42 is a tag
+		{"number tag", "reviewed PR #42 fix", "reviewed PR fix", "", []string{"42"}},
+		{"tag with number prefix", "#123 bug fix", "bug fix", "", []string{"123"}},
+
+		// Real-world use cases
+		{"version numbers", "deployed v2.0 @prod #release", "deployed v2.0", "prod", []string{"release"}},
+		{"full workflow entry", "code review @client #review #urgent", "code review", "client", []string{"review", "urgent"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}
+
+func TestParseProjectAndTags_CaseSensitivity(t *testing.T) {
+	// Project and tag names should preserve their original case
+	tests := []struct {
+		name         string
+		input        string
+		expectedDesc string
+		expectedProj string
+		expectedTags []string
+	}{
+		{"uppercase project", "fix bug @ACME", "fix bug", "ACME", nil},
+		{"mixed case project", "fix bug @AcMe", "fix bug", "AcMe", nil},
+		{"uppercase tag", "fix bug #URGENT", "fix bug", "", []string{"URGENT"}},
+		{"mixed case tag", "fix bug #BugFix", "fix bug", "", []string{"BugFix"}},
+		{"mixed case both", "fix @Client #HighPriority", "fix", "Client", []string{"HighPriority"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, proj, tags := ParseProjectAndTags(tt.input)
+			if desc != tt.expectedDesc {
+				t.Errorf("ParseProjectAndTags(%q) desc = %q, expected %q", tt.input, desc, tt.expectedDesc)
+			}
+			if proj != tt.expectedProj {
+				t.Errorf("ParseProjectAndTags(%q) project = %q, expected %q", tt.input, proj, tt.expectedProj)
+			}
+			if !equalStringSlices(tags, tt.expectedTags) {
+				t.Errorf("ParseProjectAndTags(%q) tags = %v, expected %v", tt.input, tags, tt.expectedTags)
+			}
+		})
+	}
+}

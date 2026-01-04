@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // combinedTimePattern matches combined time duration in XhYm format (e.g., "1h30m", "2h15m")
@@ -74,4 +75,42 @@ func ParseDuration(input string) (minutes int, err error) {
 	}
 
 	return minutes, nil
+}
+
+// projectPattern matches @project syntax (e.g., "@acme", "@my-project", "@project123")
+// Project names can contain alphanumeric characters, hyphens, and underscores
+var projectPattern = regexp.MustCompile(`@([a-zA-Z0-9_-]+)`)
+
+// tagPattern matches #tag syntax (e.g., "#bugfix", "#urgent", "#v1-release")
+// Tag names can contain alphanumeric characters, hyphens, and underscores
+var tagPattern = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
+
+// ParseProjectAndTags extracts @project and #tags from a description string.
+// Returns the cleaned description (without @project and #tags), the project name (if any),
+// and a slice of tags.
+// If multiple @project tokens are found, the last one wins.
+// Example: "fix bug @acme #bugfix #urgent" -> ("fix bug", "acme", ["bugfix", "urgent"])
+func ParseProjectAndTags(description string) (cleanDesc string, project string, tags []string) {
+	// Extract all projects (last one wins)
+	projectMatches := projectPattern.FindAllStringSubmatch(description, -1)
+	if len(projectMatches) > 0 {
+		project = projectMatches[len(projectMatches)-1][1]
+	}
+
+	// Extract all tags
+	tagMatches := tagPattern.FindAllStringSubmatch(description, -1)
+	for _, match := range tagMatches {
+		tags = append(tags, match[1])
+	}
+
+	// Remove all @project and #tag tokens from the description
+	cleanDesc = projectPattern.ReplaceAllString(description, "")
+	cleanDesc = tagPattern.ReplaceAllString(cleanDesc, "")
+
+	// Clean up excess whitespace
+	cleanDesc = strings.TrimSpace(cleanDesc)
+	// Replace multiple spaces with a single space
+	cleanDesc = regexp.MustCompile(`\s+`).ReplaceAllString(cleanDesc, " ")
+
+	return cleanDesc, project, tags
 }

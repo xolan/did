@@ -8,4 +8,6 @@ type Entry struct {
 	Description     string    `json:"description"`
 	DurationMinutes int       `json:"duration_minutes"`
 	RawInput        string    `json:"raw_input"`
+	Project         string    `json:"project,omitempty"`
+	Tags            []string  `json:"tags,omitempty"`
 }

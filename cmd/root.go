@@ -29,7 +29,13 @@ Usage:
   did restore [n]                               Restore from backup (default: most recent)
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
-Examples: 2h, 30m, 1h30m`,
+Examples: 2h, 30m, 1h30m
+
+Projects and Tags:
+  Optionally categorize entries with @project and #tags in descriptions.
+  did fix login bug @acme for 1h                Assign entry to project 'acme'
+  did code review #review for 30m               Add tag 'review' to entry
+  did API work @client #backend #api for 2h     Combine project with multiple tags`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
@@ -155,6 +161,16 @@ func createEntry(args []string) {
 		return
 	}
 
+	// Parse project and tags from description
+	cleanDesc, project, tags := entry.ParseProjectAndTags(description)
+
+	// Check that cleaned description is not empty (in case it was only @project/#tags)
+	if cleanDesc == "" {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty (only project/tags provided)")
+		deps.Exit(1)
+		return
+	}
+
 	// Parse the duration
 	minutes, err := entry.ParseDuration(durationStr)
 	if err != nil {
@@ -168,9 +184,11 @@ func createEntry(args []string) {
 	// Create the entry
 	e := entry.Entry{
 		Timestamp:       time.Now(),
-		Description:     description,
+		Description:     cleanDesc,
 		DurationMinutes: minutes,
 		RawInput:        rawInput,
+		Project:         project,
+		Tags:            tags,
 	}
 
 	// Get storage path
@@ -192,8 +210,8 @@ func createEntry(args []string) {
 		return
 	}
 
-	// Display success message
-	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", description, formatDuration(minutes))
+	// Display success message with optional project and tags
+	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", formatEntryForLog(cleanDesc, project, tags), formatDuration(minutes))
 }
 
 // listEntries reads and displays entries filtered by the given time range
@@ -259,7 +277,7 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 			maxIndexWidth,
 			i+1, // 1-based index for user reference
 			e.Timestamp.Format("15:04"),
-			e.Description,
+			formatEntryForLog(e.Description, e.Project, e.Tags),
 			formatDuration(e.DurationMinutes))
 	}
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
@@ -331,6 +349,36 @@ func formatDuration(minutes int) string {
 		return fmt.Sprintf("%dh", hours)
 	}
 	return fmt.Sprintf("%dh %dm", hours, mins)
+}
+
+// formatProjectAndTags formats project and tags for display
+// Returns format like: "@project" or "#tag1 #tag2" or "@project #tag1 #tag2"
+// Returns empty string if no project or tags
+func formatProjectAndTags(project string, tags []string) string {
+	if project == "" && len(tags) == 0 {
+		return ""
+	}
+
+	var parts []string
+	if project != "" {
+		parts = append(parts, "@"+project)
+	}
+	for _, tag := range tags {
+		parts = append(parts, "#"+tag)
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// formatEntryForLog formats a description with optional project and tags for display
+// Returns format like: "description" or "description [@project]" or "description [#tag1 #tag2]"
+// or "description [@project #tag1 #tag2]"
+func formatEntryForLog(description, project string, tags []string) string {
+	metadata := formatProjectAndTags(project, tags)
+	if metadata == "" {
+		return description
+	}
+	return fmt.Sprintf("%s [%s]", description, metadata)
 }
 
 // editEntry modifies an existing time tracking entry
@@ -407,7 +455,19 @@ func editEntry(cmd *cobra.Command, args []string) {
 
 	// Update description if provided
 	if newDescription != "" {
-		e.Description = newDescription
+		// Parse project and tags from new description
+		cleanDesc, project, tags := entry.ParseProjectAndTags(newDescription)
+
+		// Check that cleaned description is not empty (in case it was only @project/#tags)
+		if cleanDesc == "" {
+			_, _ = fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty (only project/tags provided)")
+			deps.Exit(1)
+			return
+		}
+
+		e.Description = cleanDesc
+		e.Project = project
+		e.Tags = tags
 	}
 
 	// Update duration if provided
@@ -424,15 +484,20 @@ func editEntry(cmd *cobra.Command, args []string) {
 	}
 
 	// Update RawInput field to reflect changes
+	// Include project/tags in raw input reconstruction
+	descWithMeta := e.Description
+	if e.Project != "" || len(e.Tags) > 0 {
+		descWithMeta = fmt.Sprintf("%s %s", e.Description, formatProjectAndTags(e.Project, e.Tags))
+	}
 	if newDescription != "" && newDuration != "" {
 		// Both updated
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, newDuration)
 	} else if newDescription != "" {
 		// Only description updated - reconstruct with existing duration
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, formatDuration(e.DurationMinutes))
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, formatDuration(e.DurationMinutes))
 	} else if newDuration != "" {
-		// Only duration updated - reconstruct with existing description
-		e.RawInput = fmt.Sprintf("%s for %s", e.Description, newDuration)
+		// Only duration updated - reconstruct with existing description and project/tags
+		e.RawInput = fmt.Sprintf("%s for %s", descWithMeta, newDuration)
 	}
 
 	// Preserve original timestamp (already unchanged in e)
@@ -446,8 +511,8 @@ func editEntry(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Display success message
-	_, _ = fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, e.Description, formatDuration(e.DurationMinutes))
+	// Display success message with project/tags
+	_, _ = fmt.Fprintf(deps.Stdout, "Updated entry %d: %s (%s)\n", userIndex, formatEntryForLog(e.Description, e.Project, e.Tags), formatDuration(e.DurationMinutes))
 }
 
 // pluralize returns the singular or plural form of a word based on count

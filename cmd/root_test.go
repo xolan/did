@@ -939,3 +939,1491 @@ func TestValidate_Command(t *testing.T) {
 		t.Errorf("Expected 'Storage file is healthy', got: %s", stdout.String())
 	}
 }
+
+func TestFormatProjectAndTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		project  string
+		tags     []string
+		expected string
+	}{
+		{
+			name:     "empty project and tags",
+			project:  "",
+			tags:     nil,
+			expected: "",
+		},
+		{
+			name:     "empty project and empty tags slice",
+			project:  "",
+			tags:     []string{},
+			expected: "",
+		},
+		{
+			name:     "project only",
+			project:  "acme",
+			tags:     nil,
+			expected: "@acme",
+		},
+		{
+			name:     "single tag only",
+			project:  "",
+			tags:     []string{"bugfix"},
+			expected: "#bugfix",
+		},
+		{
+			name:     "multiple tags only",
+			project:  "",
+			tags:     []string{"bugfix", "urgent"},
+			expected: "#bugfix #urgent",
+		},
+		{
+			name:     "project and single tag",
+			project:  "acme",
+			tags:     []string{"bugfix"},
+			expected: "@acme #bugfix",
+		},
+		{
+			name:     "project and multiple tags",
+			project:  "acme",
+			tags:     []string{"bugfix", "urgent", "frontend"},
+			expected: "@acme #bugfix #urgent #frontend",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatProjectAndTags(tt.project, tt.tags)
+			if result != tt.expected {
+				t.Errorf("formatProjectAndTags(%q, %v) = %q, expected %q", tt.project, tt.tags, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatEntryForLog(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		project     string
+		tags        []string
+		expected    string
+	}{
+		{
+			name:        "description only",
+			description: "fix bug",
+			project:     "",
+			tags:        nil,
+			expected:    "fix bug",
+		},
+		{
+			name:        "description with project",
+			description: "fix bug",
+			project:     "acme",
+			tags:        nil,
+			expected:    "fix bug [@acme]",
+		},
+		{
+			name:        "description with tags",
+			description: "fix bug",
+			project:     "",
+			tags:        []string{"bugfix", "urgent"},
+			expected:    "fix bug [#bugfix #urgent]",
+		},
+		{
+			name:        "description with project and tags",
+			description: "fix bug",
+			project:     "acme",
+			tags:        []string{"bugfix", "urgent"},
+			expected:    "fix bug [@acme #bugfix #urgent]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatEntryForLog(tt.description, tt.project, tt.tags)
+			if result != tt.expected {
+				t.Errorf("formatEntryForLog(%q, %q, %v) = %q, expected %q", tt.description, tt.project, tt.tags, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEditEntry_DescriptionWithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry without project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original task",
+		DurationMinutes: 60,
+		RawInput:        "original task for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description containing @project and #tags
+	_ = editCmd.Flags().Set("description", "fix bug @acme #bugfix #urgent")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify success message shows project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output, got: %s", output)
+	}
+
+	// Verify entry was correctly updated
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+		t.Errorf("Expected tags ['bugfix', 'urgent'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_DurationPreservesProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix", "urgent"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit only duration
+	_ = editCmd.Flags().Set("duration", "2h")
+	defer func() { _ = editCmd.Flags().Set("duration", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify success message shows project/tags (preserved)
+	output := stdout.String()
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "2h") {
+		t.Errorf("Expected '2h' in output, got: %s", output)
+	}
+
+	// Verify project/tags are preserved in the entry
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme' preserved, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags preserved, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 120 {
+		t.Errorf("Expected duration 120, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestEditEntry_RemoveProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, _, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description that has NO project/tags
+	_ = editCmd.Flags().Set("description", "plain description")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	// Verify project/tags were removed
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "plain description" {
+		t.Errorf("Expected description 'plain description', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected empty tags, got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_AddProjectAndTagsToExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "plain task",
+		DurationMinutes: 60,
+		RawInput:        "plain task for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Add project and tags via edit
+	_ = editCmd.Flags().Set("description", "updated task @newproject #newtag")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	output := stdout.String()
+	if !strings.Contains(output, "@newproject") {
+		t.Errorf("Expected '@newproject' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#newtag") {
+		t.Errorf("Expected '#newtag' in output, got: %s", output)
+	}
+
+	// Verify entry was updated correctly
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Project != "newproject" {
+		t.Errorf("Expected project 'newproject', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 1 || entries[0].Tags[0] != "newtag" {
+		t.Errorf("Expected tags ['newtag'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_EmptyDescriptionWithOnlyProjectTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original",
+		DurationMinutes: 60,
+		RawInput:        "original for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Try to edit with only @project/#tags (no actual description)
+	_ = editCmd.Flags().Set("description", "@acme #bugfix")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for empty description")
+	}
+	if !strings.Contains(stderr.String(), "Description cannot be empty") {
+		t.Errorf("Expected empty description error, got: %s", stderr.String())
+	}
+}
+
+// Integration tests for entry creation with project and tags
+
+func TestCreateEntry_WithProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"fix", "bug", "@acme", "for", "2h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct project
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected no tags, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 120 {
+		t.Errorf("Expected duration 120 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"fix", "bug", "#bugfix", "#urgent", "for", "1h30m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+			t.Errorf("Expected tags ['bugfix', 'urgent'], got: %v", entries[0].Tags)
+		}
+	}
+	if entries[0].DurationMinutes != 90 {
+		t.Errorf("Expected duration 90 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"implement", "feature", "@clientco", "#feature", "#priority", "for", "3h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "implement feature") {
+		t.Errorf("Expected 'implement feature' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@clientco") {
+		t.Errorf("Expected '@clientco' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#feature") {
+		t.Errorf("Expected '#feature' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#priority") {
+		t.Errorf("Expected '#priority' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct project and tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "implement feature" {
+		t.Errorf("Expected description 'implement feature', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "clientco" {
+		t.Errorf("Expected project 'clientco', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "feature" || entries[0].Tags[1] != "priority" {
+			t.Errorf("Expected tags ['feature', 'priority'], got: %v", entries[0].Tags)
+		}
+	}
+	if entries[0].DurationMinutes != 180 {
+		t.Errorf("Expected duration 180 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithoutProjectOrTags_BackwardCompat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"simple", "task", "for", "45m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "simple task") {
+		t.Errorf("Expected 'simple task' in output, got: %s", output)
+	}
+	// Output should NOT contain project/tag brackets when neither is present
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets in output, got: %s", output)
+	}
+
+	// Verify entry was written without project or tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "simple task" {
+		t.Errorf("Expected description 'simple task', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected no tags, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 45 {
+		t.Errorf("Expected duration 45 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_VerifyJSONLStorage(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, _, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"review", "code", "@acme", "#code-review", "for", "1h"})
+
+	// Read raw JSONL file to verify correct JSON encoding
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+
+	jsonStr := string(content)
+	// Verify project field is present in JSON
+	if !strings.Contains(jsonStr, `"project":"acme"`) {
+		t.Errorf("Expected JSON to contain project field, got: %s", jsonStr)
+	}
+	// Verify tags field is present in JSON
+	if !strings.Contains(jsonStr, `"tags":["code-review"]`) {
+		t.Errorf("Expected JSON to contain tags field, got: %s", jsonStr)
+	}
+	// Verify description is clean (without @project and #tags)
+	if !strings.Contains(jsonStr, `"description":"review code"`) {
+		t.Errorf("Expected JSON to contain clean description, got: %s", jsonStr)
+	}
+}
+
+func TestCreateEntry_OnlyProjectTagsError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Create entry with only @project/#tags (no actual description)
+	createEntry([]string{"@acme", "#bugfix", "for", "1h"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for empty description")
+	}
+	if !strings.Contains(stderr.String(), "Description cannot be empty") {
+		t.Errorf("Expected empty description error, got: %s", stderr.String())
+	}
+}
+
+func TestCreateEntry_ProjectAndTagsInMiddle(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test with @project and #tags in the middle of description
+	createEntry([]string{"fix", "@acme", "bug", "#bugfix", "in", "login", "for", "2h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+
+	// Verify entry was written correctly
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	// Description should be cleaned of @project and #tags
+	if entries[0].Description != "fix bug in login" {
+		t.Errorf("Expected description 'fix bug in login', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 1 || entries[0].Tags[0] != "bugfix" {
+		t.Errorf("Expected tags ['bugfix'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestCreateEntry_MultipleTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"deploy", "app", "#deploy", "#production", "#release-v1", "for", "30m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "#deploy") {
+		t.Errorf("Expected '#deploy' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#production") {
+		t.Errorf("Expected '#production' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#release-v1") {
+		t.Errorf("Expected '#release-v1' in output, got: %s", output)
+	}
+
+	// Verify all tags were stored
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if len(entries[0].Tags) != 3 {
+		t.Errorf("Expected 3 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "deploy" || entries[0].Tags[1] != "production" || entries[0].Tags[2] != "release-v1" {
+			t.Errorf("Expected tags ['deploy', 'production', 'release-v1'], got: %v", entries[0].Tags)
+		}
+	}
+}
+
+// Integration tests for listing entries with project and tags
+
+func TestListEntries_WithProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with project
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme for 1h",
+		Project:         "acme",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows @project
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [@project])
+	if !strings.Contains(output, "fix bug [@acme]") {
+		t.Errorf("Expected 'fix bug [@acme]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_WithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "implement feature",
+		DurationMinutes: 120,
+		RawInput:        "implement feature #feature #urgent for 2h",
+		Tags:            []string{"feature", "urgent"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows #tags
+	if !strings.Contains(output, "#feature") {
+		t.Errorf("Expected '#feature' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "implement feature") {
+		t.Errorf("Expected 'implement feature' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [#tag1 #tag2])
+	if !strings.Contains(output, "implement feature [#feature #urgent]") {
+		t.Errorf("Expected 'implement feature [#feature #urgent]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_WithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with both project and tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "deploy app",
+		DurationMinutes: 90,
+		RawInput:        "deploy app @clientco #deploy #production for 1h30m",
+		Project:         "clientco",
+		Tags:            []string{"deploy", "production"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows @project and #tags
+	if !strings.Contains(output, "@clientco") {
+		t.Errorf("Expected '@clientco' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#deploy") {
+		t.Errorf("Expected '#deploy' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#production") {
+		t.Errorf("Expected '#production' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "deploy app") {
+		t.Errorf("Expected 'deploy app' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [@project #tag1 #tag2])
+	if !strings.Contains(output, "deploy app [@clientco #deploy #production]") {
+		t.Errorf("Expected 'deploy app [@clientco #deploy #production]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_BackwardCompatibility_NoProjectOrTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project or tags (simulating old entries)
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "plain task",
+		DurationMinutes: 45,
+		RawInput:        "plain task for 45m",
+		// No Project or Tags fields set (empty values)
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify description is shown without brackets
+	if !strings.Contains(output, "plain task") {
+		t.Errorf("Expected 'plain task' in list output, got: %s", output)
+	}
+	// Verify no project/tag brackets are present
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets in list output for plain entries, got: %s", output)
+	}
+	// Verify the output shows proper formatting (should just be "plain task" without brackets)
+	if strings.Contains(output, "plain task [") {
+		t.Errorf("Did not expect 'plain task [' in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_MixedEntriesWithAndWithoutProjectTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	// Use fixed times within today to avoid edge cases when test runs early in the day
+	todayBase := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, now.Location())
+
+	// Create multiple entries with different combinations
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       todayBase,
+			Description:     "plain entry",
+			DurationMinutes: 30,
+			RawInput:        "plain entry for 30m",
+		},
+		{
+			Timestamp:       todayBase.Add(1 * time.Hour),
+			Description:     "with project",
+			DurationMinutes: 60,
+			RawInput:        "with project @acme for 1h",
+			Project:         "acme",
+		},
+		{
+			Timestamp:       todayBase.Add(2 * time.Hour),
+			Description:     "with tags",
+			DurationMinutes: 45,
+			RawInput:        "with tags #tag1 #tag2 for 45m",
+			Tags:            []string{"tag1", "tag2"},
+		},
+		{
+			Timestamp:       todayBase.Add(3 * time.Hour),
+			Description:     "with both",
+			DurationMinutes: 90,
+			RawInput:        "with both @proj #mytag for 1h30m",
+			Project:         "proj",
+			Tags:            []string{"mytag"},
+		},
+	}
+
+	for _, e := range testEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+
+	// Verify plain entry shows without brackets
+	if !strings.Contains(output, "plain entry") {
+		t.Errorf("Expected 'plain entry' in output, got: %s", output)
+	}
+	// Plain entry should NOT have brackets following it in the format "plain entry ["
+	// But it's hard to check this precisely, so we'll just verify others have correct format
+
+	// Verify entry with project shows @project
+	if !strings.Contains(output, "with project [@acme]") {
+		t.Errorf("Expected 'with project [@acme]' in output, got: %s", output)
+	}
+
+	// Verify entry with tags shows #tags
+	if !strings.Contains(output, "with tags [#tag1 #tag2]") {
+		t.Errorf("Expected 'with tags [#tag1 #tag2]' in output, got: %s", output)
+	}
+
+	// Verify entry with both shows both
+	if !strings.Contains(output, "with both [@proj #mytag]") {
+		t.Errorf("Expected 'with both [@proj #mytag]' in output, got: %s", output)
+	}
+
+	// Verify total is shown
+	if !strings.Contains(output, "Total:") {
+		t.Errorf("Expected 'Total:' in output, got: %s", output)
+	}
+}
+
+// Integration tests for editing entries with project and tags
+
+func TestEditEntry_Integration_DescriptionReParsesProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry without project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original task",
+		DurationMinutes: 60,
+		RawInput:        "original task for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description containing @project and #tags
+	_ = editCmd.Flags().Set("description", "fix bug @acme #bugfix #urgent")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output, got: %s", output)
+	}
+
+	// Verify JSONL storage contains correct fields
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if !strings.Contains(jsonStr, `"description":"fix bug"`) {
+		t.Errorf("Expected JSON to contain clean description, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"project":"acme"`) {
+		t.Errorf("Expected JSON to contain project field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"tags":["bugfix","urgent"]`) {
+		t.Errorf("Expected JSON to contain tags field, got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+		t.Errorf("Expected tags ['bugfix', 'urgent'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_Integration_DurationPreservesProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix #urgent for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix", "urgent"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit only duration
+	_ = editCmd.Flags().Set("duration", "3h")
+	defer func() { _ = editCmd.Flags().Set("duration", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows preserved project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output (preserved), got: %s", output)
+	}
+	if !strings.Contains(output, "3h") {
+		t.Errorf("Expected '3h' in output, got: %s", output)
+	}
+
+	// Verify JSONL storage preserves project/tags
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if !strings.Contains(jsonStr, `"project":"acme"`) {
+		t.Errorf("Expected JSON to preserve project field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"tags":["bugfix","urgent"]`) {
+		t.Errorf("Expected JSON to preserve tags field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"duration_minutes":180`) {
+		t.Errorf("Expected JSON to have updated duration, got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme' preserved, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+		t.Errorf("Expected tags ['bugfix', 'urgent'] preserved, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 180 {
+		t.Errorf("Expected duration 180, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestEditEntry_Integration_RemoveProjectAndTagsViaEdit(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme #bugfix for 1h",
+		Project:         "acme",
+		Tags:            []string{"bugfix"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit with description that has NO project/tags
+	_ = editCmd.Flags().Set("description", "plain description")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows plain description without brackets
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "plain description") {
+		t.Errorf("Expected 'plain description' in output, got: %s", output)
+	}
+	// Should NOT have project/tag brackets
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets after removal, got: %s", output)
+	}
+
+	// Verify JSONL storage has empty/missing project and tags (omitempty)
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if strings.Contains(jsonStr, `"project":`) {
+		t.Errorf("Expected JSON to NOT contain project field (omitempty), got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"tags":`) {
+		t.Errorf("Expected JSON to NOT contain tags field (omitempty), got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"description":"plain description"`) {
+		t.Errorf("Expected JSON to contain new description, got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "plain description" {
+		t.Errorf("Expected description 'plain description', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project after removal, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected empty tags after removal, got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_Integration_AddProjectAndTagsViaEdit(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "plain task",
+		DurationMinutes: 45,
+		RawInput:        "plain task for 45m",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Add project and tags via edit
+	_ = editCmd.Flags().Set("description", "updated task @newproject #newtag #othertag")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows new project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "@newproject") {
+		t.Errorf("Expected '@newproject' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#newtag") {
+		t.Errorf("Expected '#newtag' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#othertag") {
+		t.Errorf("Expected '#othertag' in output, got: %s", output)
+	}
+
+	// Verify JSONL storage contains new project and tags
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if !strings.Contains(jsonStr, `"project":"newproject"`) {
+		t.Errorf("Expected JSON to contain new project field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"tags":["newtag","othertag"]`) {
+		t.Errorf("Expected JSON to contain new tags field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"description":"updated task"`) {
+		t.Errorf("Expected JSON to contain clean description, got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "updated task" {
+		t.Errorf("Expected description 'updated task', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "newproject" {
+		t.Errorf("Expected project 'newproject', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "newtag" || entries[0].Tags[1] != "othertag" {
+		t.Errorf("Expected tags ['newtag', 'othertag'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_Integration_ChangeProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITH project/tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @oldproject #oldtag for 1h",
+		Project:         "oldproject",
+		Tags:            []string{"oldtag"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Change to different project and tags
+	_ = editCmd.Flags().Set("description", "implement feature @newclient #feature #priority")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows new project/tags
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "@newclient") {
+		t.Errorf("Expected '@newclient' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#feature") {
+		t.Errorf("Expected '#feature' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#priority") {
+		t.Errorf("Expected '#priority' in output, got: %s", output)
+	}
+	// Old values should not appear
+	if strings.Contains(output, "@oldproject") {
+		t.Errorf("Did not expect '@oldproject' in output after change, got: %s", output)
+	}
+	if strings.Contains(output, "#oldtag") {
+		t.Errorf("Did not expect '#oldtag' in output after change, got: %s", output)
+	}
+
+	// Verify JSONL storage contains new values
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if !strings.Contains(jsonStr, `"project":"newclient"`) {
+		t.Errorf("Expected JSON to contain new project, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"tags":["feature","priority"]`) {
+		t.Errorf("Expected JSON to contain new tags, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"description":"implement feature"`) {
+		t.Errorf("Expected JSON to contain new description, got: %s", jsonStr)
+	}
+	// Old values should not appear
+	if strings.Contains(jsonStr, `"oldproject"`) {
+		t.Errorf("Did not expect old project in JSON after change, got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"oldtag"`) {
+		t.Errorf("Did not expect old tag in JSON after change, got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "implement feature" {
+		t.Errorf("Expected description 'implement feature', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "newclient" {
+		t.Errorf("Expected project 'newclient', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "feature" || entries[0].Tags[1] != "priority" {
+		t.Errorf("Expected tags ['feature', 'priority'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_Integration_BackwardCompatibility_NoProjectOrTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project/tags (simulating old entry)
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "old entry",
+		DurationMinutes: 30,
+		RawInput:        "old entry for 30m",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit description without adding project/tags
+	_ = editCmd.Flags().Set("description", "updated entry")
+	defer func() { _ = editCmd.Flags().Set("description", "") }()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message shows plain description without brackets
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "updated entry") {
+		t.Errorf("Expected 'updated entry' in output, got: %s", output)
+	}
+	// Should NOT have project/tag brackets
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets for plain entry, got: %s", output)
+	}
+
+	// Verify JSONL storage does not have project/tags (omitempty)
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if strings.Contains(jsonStr, `"project":`) {
+		t.Errorf("Expected JSON to NOT contain project field (omitempty), got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"tags":`) {
+		t.Errorf("Expected JSON to NOT contain tags field (omitempty), got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "updated entry" {
+		t.Errorf("Expected description 'updated entry', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected empty tags, got: %v", entries[0].Tags)
+	}
+}
+
+func TestEditEntry_Integration_EditBothDescriptionAndDurationWithProjectTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original",
+		DurationMinutes: 60,
+		RawInput:        "original for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Edit both description and duration with project/tags
+	_ = editCmd.Flags().Set("description", "new task @project #tag1 #tag2")
+	_ = editCmd.Flags().Set("duration", "2h30m")
+	defer func() {
+		_ = editCmd.Flags().Set("description", "")
+		_ = editCmd.Flags().Set("duration", "")
+	}()
+
+	editEntry(editCmd, []string{"1"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	// Verify success message
+	output := stdout.String()
+	if !strings.Contains(output, "Updated entry 1") {
+		t.Errorf("Expected 'Updated entry 1', got: %s", output)
+	}
+	if !strings.Contains(output, "new task") {
+		t.Errorf("Expected 'new task' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@project") {
+		t.Errorf("Expected '@project' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#tag1") {
+		t.Errorf("Expected '#tag1' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#tag2") {
+		t.Errorf("Expected '#tag2' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "2h 30m") {
+		t.Errorf("Expected '2h 30m' in output, got: %s", output)
+	}
+
+	// Verify JSONL storage
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+	jsonStr := string(content)
+	if !strings.Contains(jsonStr, `"description":"new task"`) {
+		t.Errorf("Expected JSON to contain new description, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"project":"project"`) {
+		t.Errorf("Expected JSON to contain project field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"tags":["tag1","tag2"]`) {
+		t.Errorf("Expected JSON to contain tags field, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"duration_minutes":150`) {
+		t.Errorf("Expected JSON to have updated duration (150 minutes), got: %s", jsonStr)
+	}
+
+	// Verify entry fields via storage API
+	entries, _ := storage.ReadEntries(storagePath)
+	if entries[0].Description != "new task" {
+		t.Errorf("Expected description 'new task', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "project" {
+		t.Errorf("Expected project 'project', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 || entries[0].Tags[0] != "tag1" || entries[0].Tags[1] != "tag2" {
+		t.Errorf("Expected tags ['tag1', 'tag2'], got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 150 {
+		t.Errorf("Expected duration 150 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
