@@ -29,7 +29,13 @@ Usage:
   did restore [n]                               Restore from backup (default: most recent)
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
-Examples: 2h, 30m, 1h30m`,
+Examples: 2h, 30m, 1h30m
+
+Projects and Tags:
+  Optionally categorize entries with @project and #tags in descriptions.
+  did fix login bug @acme for 1h                Assign entry to project 'acme'
+  did code review #review for 30m               Add tag 'review' to entry
+  did API work @client #backend #api for 2h     Combine project with multiple tags`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
