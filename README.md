@@ -7,6 +7,10 @@
 
 A simple CLI tool for tracking time spent on tasks.
 
+## Disclaimer
+
+This is an experimental project created almost exclusively using [Claude Code](https://claude.ai/claude-code) and [AutoClaude](https://github.com/almaraz97/AutoClaude). While functional, it should be treated as a proof-of-concept for AI-assisted development rather than production-ready software.
+
 ## Features
 
 - Log work activities with duration
