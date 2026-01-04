@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"sort"
 	"time"
 
 	"github.com/xolan/did/internal/entry"
@@ -12,6 +13,13 @@ type Statistics struct {
 	AverageMinutesPerDay float64
 	EntryCount           int
 	DaysWithEntries      int
+}
+
+// ProjectBreakdown contains statistics for a single project
+type ProjectBreakdown struct {
+	Project      string
+	TotalMinutes int
+	EntryCount   int
 }
 
 // CalculateStatistics computes statistics for entries within the given date range
@@ -52,4 +60,56 @@ func CalculateStatistics(entries []entry.Entry, start, end time.Time) Statistics
 	}
 
 	return stats
+}
+
+// CalculateProjectBreakdown groups entries by project and returns breakdown sorted by total minutes
+func CalculateProjectBreakdown(entries []entry.Entry, start, end time.Time) []ProjectBreakdown {
+	if len(entries) == 0 {
+		return []ProjectBreakdown{}
+	}
+
+	// Group entries by project
+	projectMap := make(map[string]*ProjectBreakdown)
+
+	for _, e := range entries {
+		// Skip deleted entries
+		if e.DeletedAt != nil {
+			continue
+		}
+
+		// Check if entry is within the date range
+		if (e.Timestamp.Equal(start) || e.Timestamp.After(start)) &&
+			(e.Timestamp.Equal(end) || e.Timestamp.Before(end)) {
+
+			// Determine project name
+			projectName := e.Project
+			if projectName == "" {
+				projectName = "(no project)"
+			}
+
+			// Initialize project breakdown if not exists
+			if _, exists := projectMap[projectName]; !exists {
+				projectMap[projectName] = &ProjectBreakdown{
+					Project: projectName,
+				}
+			}
+
+			// Accumulate totals
+			projectMap[projectName].TotalMinutes += e.DurationMinutes
+			projectMap[projectName].EntryCount++
+		}
+	}
+
+	// Convert map to slice
+	var breakdowns []ProjectBreakdown
+	for _, breakdown := range projectMap {
+		breakdowns = append(breakdowns, *breakdown)
+	}
+
+	// Sort by total minutes descending
+	sort.Slice(breakdowns, func(i, j int) bool {
+		return breakdowns[i].TotalMinutes > breakdowns[j].TotalMinutes
+	})
+
+	return breakdowns
 }
