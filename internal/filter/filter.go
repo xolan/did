@@ -86,8 +86,8 @@ func (f *Filter) MatchesTags(e entry.Entry) bool {
 	return true
 }
 
-// Matches will be implemented in subsequent subtasks
+// Matches returns true if the entry matches ALL non-empty filter criteria (AND logic).
+// An empty filter matches all entries.
 func (f *Filter) Matches(e entry.Entry) bool {
-	// Placeholder - will be implemented in subtask 1.5
-	return true
+	return f.MatchesKeyword(e) && f.MatchesProject(e) && f.MatchesTags(e)
 }
