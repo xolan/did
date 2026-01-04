@@ -48,6 +48,14 @@ Filter Examples:
   did #bugfix                                   List today's entries tagged 'bugfix'
   did y @client #urgent                         Yesterday's entries for project 'client' tagged 'urgent'
   did --project acme --tag review --tag urgent  Multiple filters combined
+  did lw @acme                                  Last week's entries for project 'acme'
+  did from 2024-01-01 to 2024-01-31 #bug        Entries tagged 'bug' in date range
+
+Search Examples:
+  did search meeting                            Search all entries for 'meeting'
+  did search bug --from 2024-01-01              Search from a specific date
+  did search review --last 7                    Search in the last 7 days
+  did search api --from 2024-01-01 --to 2024-01-31    Search within date range
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
