@@ -2709,3 +2709,965 @@ func TestExportJSON_Integration_ComplexFilteringWithMultipleMatches(t *testing.T
 		}
 	}
 }
+
+// CSV Export Tests
+
+func TestExportCSV_BasicOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	// Should have header + 3 entries
+	if len(lines) != 4 {
+		t.Errorf("Expected 4 lines (header + 3 entries), got %d", len(lines))
+	}
+
+	// Verify header
+	expectedHeader := "date,description,duration_minutes,duration_hours,project,tags"
+	if lines[0] != expectedHeader {
+		t.Errorf("Expected header:\n%s\nGot:\n%s", expectedHeader, lines[0])
+	}
+
+	// Verify data rows contain expected fields
+	for i := 1; i < len(lines); i++ {
+		fields := strings.Split(lines[i], ",")
+		if len(fields) < 6 {
+			t.Errorf("Line %d has insufficient fields: %d", i, len(fields))
+		}
+	}
+}
+
+func TestExportCSV_HeaderStructure(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a single entry
+	now := time.Now()
+	testEntry := entry.Entry{
+		Timestamp:       now,
+		Description:     "Test entry",
+		DurationMinutes: 60,
+		RawInput:        "Test entry for 1h",
+		Project:         "test",
+		Tags:            []string{"tag1"},
+	}
+
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	// Check header
+	if len(lines) < 1 {
+		t.Fatal("No output generated")
+	}
+
+	header := lines[0]
+	expectedColumns := []string{"date", "description", "duration_minutes", "duration_hours", "project", "tags"}
+
+	for _, col := range expectedColumns {
+		if !strings.Contains(header, col) {
+			t.Errorf("Header missing column: %s", col)
+		}
+	}
+}
+
+func TestExportCSV_RFC4180_Escaping_Commas(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	testEntry := entry.Entry{
+		Timestamp:       now,
+		Description:     "Meeting with client, discussed features, and pricing",
+		DurationMinutes: 60,
+		RawInput:        "Meeting with client, discussed features, and pricing for 1h",
+		Project:         "acme",
+		Tags:            []string{"meeting"},
+	}
+
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Description with commas should be quoted in RFC 4180
+	if !strings.Contains(output, `"Meeting with client, discussed features, and pricing"`) {
+		t.Errorf("Description with commas should be quoted. Output:\n%s", output)
+	}
+}
+
+func TestExportCSV_RFC4180_Escaping_Quotes(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	testEntry := entry.Entry{
+		Timestamp:       now,
+		Description:     `Client said "looks great" during review`,
+		DurationMinutes: 30,
+		RawInput:        `Client said "looks great" during review for 30m`,
+		Project:         "acme",
+		Tags:            []string{},
+	}
+
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Description with quotes should be escaped (doubled) and the field quoted
+	if !strings.Contains(output, `"Client said ""looks great"" during review"`) {
+		t.Errorf("Description with quotes should be properly escaped. Output:\n%s", output)
+	}
+}
+
+func TestExportCSV_RFC4180_Escaping_Newlines(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	testEntry := entry.Entry{
+		Timestamp:       now,
+		Description:     "Multi-line description\nwith newline\ncharacters",
+		DurationMinutes: 45,
+		RawInput:        "Multi-line description for 45m",
+		Project:         "test",
+		Tags:            []string{},
+	}
+
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Description with newlines should be quoted and preserved
+	if !strings.Contains(output, "\"Multi-line description\nwith newline\ncharacters\"") {
+		t.Errorf("Description with newlines should be properly quoted. Output:\n%s", output)
+	}
+}
+
+func TestExportCSV_EmptyResults(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create empty storage file
+	if err := os.WriteFile(storagePath, []byte(""), 0644); err != nil {
+		t.Fatalf("Failed to create empty storage file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	// Should only have header row
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line (header only), got %d", len(lines))
+	}
+
+	// Verify header is present
+	expectedHeader := "date,description,duration_minutes,duration_hours,project,tags"
+	if lines[0] != expectedHeader {
+		t.Errorf("Expected header:\n%s\nGot:\n%s", expectedHeader, lines[0])
+	}
+}
+
+func TestExportCSV_DurationHoursCalculation(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	testCases := []struct {
+		minutes       int
+		expectedHours string
+	}{
+		{60, "1.00"},
+		{90, "1.50"},
+		{45, "0.75"},
+		{30, "0.50"},
+		{120, "2.00"},
+		{75, "1.25"},
+	}
+
+	for _, tc := range testCases {
+		testEntry := entry.Entry{
+			Timestamp:       now,
+			Description:     fmt.Sprintf("Entry with %d minutes", tc.minutes),
+			DurationMinutes: tc.minutes,
+			RawInput:        fmt.Sprintf("Entry for %dm", tc.minutes),
+			Project:         "",
+			Tags:            []string{},
+		}
+
+		if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	// Skip header, check each data row
+	for i, tc := range testCases {
+		lineIdx := i + 1
+		if lineIdx >= len(lines) {
+			t.Fatalf("Missing line %d for test case %d minutes", lineIdx, tc.minutes)
+		}
+
+		if !strings.Contains(lines[lineIdx], tc.expectedHours) {
+			t.Errorf("Expected duration_hours %s for %d minutes, line:\n%s",
+				tc.expectedHours, tc.minutes, lines[lineIdx])
+		}
+	}
+}
+
+func TestExportCSV_CorruptedEntriesWarning(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Write one valid entry and one corrupted entry
+	validEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "Valid entry",
+		DurationMinutes: 60,
+		RawInput:        "Valid entry for 1h",
+		Project:         "",
+		Tags:            []string{},
+	}
+
+	if err := storage.AppendEntry(storagePath, validEntry); err != nil {
+		t.Fatalf("Failed to create valid entry: %v", err)
+	}
+
+	// Append corrupted line
+	f, err := os.OpenFile(storagePath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("Failed to open storage file: %v", err)
+	}
+	_, _ = f.WriteString("{invalid json}\n")
+	f.Close()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	// Check that warning was written to stderr
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Warning") {
+		t.Error("Expected warning about corrupted entry in stderr")
+	}
+	if !strings.Contains(stderrOutput, "corrupted") {
+		t.Error("Expected 'corrupted' in stderr warning")
+	}
+
+	// Check that valid entry was still exported
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Error("Expected valid entry to be exported despite corruption")
+	}
+}
+
+func TestExportCSV_FromFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10),
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "Recent entry",
+			DurationMinutes: 60,
+			RawInput:        "Recent entry for 1h",
+		},
+		{
+			Timestamp:       now,
+			Description:     "Today entry",
+			DurationMinutes: 60,
+			RawInput:        "Today entry for 1h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Set --from flag to 5 days ago
+	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportCSVCmd.Flags().Set("from", fromDate)
+	defer exportCSVCmd.Flags().Set("from", "")
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should NOT include old entry
+	if strings.Contains(output, "Old entry") {
+		t.Error("Should not include entry from before --from date")
+	}
+
+	// Should include recent and today entries
+	if !strings.Contains(output, "Recent entry") {
+		t.Error("Should include recent entry")
+	}
+	if !strings.Contains(output, "Today entry") {
+		t.Error("Should include today entry")
+	}
+}
+
+func TestExportCSV_ToFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10),
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Middle entry",
+			DurationMinutes: 60,
+			RawInput:        "Middle entry for 1h",
+		},
+		{
+			Timestamp:       now,
+			Description:     "Today entry",
+			DurationMinutes: 60,
+			RawInput:        "Today entry for 1h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Set --to flag to 7 days ago
+	toDate := now.AddDate(0, 0, -7).Format("2006-01-02")
+	exportCSVCmd.Flags().Set("to", toDate)
+	defer exportCSVCmd.Flags().Set("to", "")
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should include old entry
+	if !strings.Contains(output, "Old entry") {
+		t.Error("Should include entry from before --to date")
+	}
+
+	// Should NOT include middle or today entries
+	if strings.Contains(output, "Middle entry") {
+		t.Error("Should not include entry after --to date")
+	}
+	if strings.Contains(output, "Today entry") {
+		t.Error("Should not include entry after --to date")
+	}
+}
+
+func TestExportCSV_FromAndToFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -15),
+			Description:     "Very old entry",
+			DurationMinutes: 60,
+			RawInput:        "Very old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -8),
+			Description:     "In range entry",
+			DurationMinutes: 60,
+			RawInput:        "In range entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2),
+			Description:     "Recent entry",
+			DurationMinutes: 60,
+			RawInput:        "Recent entry for 1h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Set date range: 10 days ago to 5 days ago
+	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
+	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportCSVCmd.Flags().Set("from", fromDate)
+	exportCSVCmd.Flags().Set("to", toDate)
+	defer func() {
+		exportCSVCmd.Flags().Set("from", "")
+		exportCSVCmd.Flags().Set("to", "")
+	}()
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should only include entry in range
+	if strings.Contains(output, "Very old entry") {
+		t.Error("Should not include entry before --from date")
+	}
+	if !strings.Contains(output, "In range entry") {
+		t.Error("Should include entry within date range")
+	}
+	if strings.Contains(output, "Recent entry") {
+		t.Error("Should not include entry after --to date")
+	}
+}
+
+func TestExportCSV_LastFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10),
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Last week entry",
+			DurationMinutes: 60,
+			RawInput:        "Last week entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2),
+			Description:     "Recent entry",
+			DurationMinutes: 60,
+			RawInput:        "Recent entry for 1h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Set --last flag to 7 days
+	exportCSVCmd.Flags().Set("last", "7")
+	defer exportCSVCmd.Flags().Set("last", "")
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should NOT include old entry (10 days ago)
+	if strings.Contains(output, "Old entry") {
+		t.Error("Should not include entry older than --last days")
+	}
+
+	// Should include entries within last 7 days
+	if !strings.Contains(output, "Last week entry") {
+		t.Error("Should include entry within --last days")
+	}
+	if !strings.Contains(output, "Recent entry") {
+		t.Error("Should include recent entry within --last days")
+	}
+}
+
+func TestExportCSV_ProjectFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "Acme work",
+			DurationMinutes: 60,
+			RawInput:        "Acme work for 1h",
+			Project:         "acme",
+		},
+		{
+			Timestamp:       now,
+			Description:     "Client work",
+			DurationMinutes: 60,
+			RawInput:        "Client work for 1h",
+			Project:         "client",
+		},
+		{
+			Timestamp:       now,
+			Description:     "No project work",
+			DurationMinutes: 60,
+			RawInput:        "No project work for 1h",
+			Project:         "",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportCSVCmd)
+
+	// Set --project flag
+	exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
+	defer resetFilterFlags(exportCSVCmd)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should only include acme project
+	if !strings.Contains(output, "Acme work") {
+		t.Error("Should include acme project entry")
+	}
+	if strings.Contains(output, "Client work") {
+		t.Error("Should not include client project entry")
+	}
+	if strings.Contains(output, "No project work") {
+		t.Error("Should not include entry without project")
+	}
+}
+
+func TestExportCSV_TagFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "Code review task",
+			DurationMinutes: 60,
+			RawInput:        "Code review task for 1h",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "Bug fix task",
+			DurationMinutes: 60,
+			RawInput:        "Bug fix task for 1h",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "No tags task",
+			DurationMinutes: 60,
+			RawInput:        "No tags task for 1h",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportCSVCmd)
+
+	// Set --tag flag
+	exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
+	defer resetFilterFlags(exportCSVCmd)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should only include review tag entry
+	if !strings.Contains(output, "Code review task") {
+		t.Error("Should include entry with review tag")
+	}
+	if strings.Contains(output, "Bug fix task") {
+		t.Error("Should not include entry with different tag")
+	}
+	if strings.Contains(output, "No tags task") {
+		t.Error("Should not include entry without tags")
+	}
+}
+
+func TestExportCSV_TagsSemicolonSeparated(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Reset any persistent flags from previous tests
+	resetFilterFlags(exportCSVCmd)
+
+	now := time.Now()
+	testEntry := entry.Entry{
+		Timestamp:       now,
+		Description:     "Multi-tag entry",
+		DurationMinutes: 60,
+		RawInput:        "Multi-tag entry for 1h",
+		Project:         "",
+		Tags:            []string{"tag1", "tag2", "tag3"},
+	}
+
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Tags should be semicolon-separated
+	if !strings.Contains(output, "tag1;tag2;tag3") {
+		t.Errorf("Expected semicolon-separated tags. Output:\n%s", output)
+	}
+}
+
+func TestExportCSV_ProjectAndTagCombined(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "Acme review",
+			DurationMinutes: 60,
+			RawInput:        "Acme review for 1h",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "Acme bugfix",
+			DurationMinutes: 60,
+			RawInput:        "Acme bugfix for 1h",
+			Project:         "acme",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "Client review",
+			DurationMinutes: 60,
+			RawInput:        "Client review for 1h",
+			Project:         "client",
+			Tags:            []string{"review"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportCSVCmd)
+
+	// Set both --project and --tag flags
+	exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
+	exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
+	defer resetFilterFlags(exportCSVCmd)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should only include entry matching both project and tag
+	if !strings.Contains(output, "Acme review") {
+		t.Error("Should include entry matching both project and tag")
+	}
+	if strings.Contains(output, "Acme bugfix") {
+		t.Error("Should not include entry with wrong tag")
+	}
+	if strings.Contains(output, "Client review") {
+		t.Error("Should not include entry with wrong project")
+	}
+}
+
+func TestExportCSV_OutputCanBeRedirected(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	// Reset any persistent flags from previous tests
+	resetFilterFlags(exportCSVCmd)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Verify output can be written to a file (simulate redirection)
+	outputFile := filepath.Join(tmpDir, "export.csv")
+	if err := os.WriteFile(outputFile, []byte(output), 0644); err != nil {
+		t.Fatalf("Failed to write output to file: %v", err)
+	}
+
+	// Verify file contains expected content
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "date,description,duration_minutes") {
+		t.Error("Output file should contain CSV header")
+	}
+	if !strings.Contains(contentStr, "Code review") {
+		t.Error("Output file should contain entry data")
+	}
+}
