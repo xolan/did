@@ -54,6 +54,15 @@ func (f *Filter) MatchesKeyword(e entry.Entry) bool {
 	return strings.Contains(strings.ToLower(e.Description), strings.ToLower(f.Keyword))
 }
 
+// MatchesProject returns true if the entry's project exactly matches the filter project (case-insensitive).
+// An empty project filter matches all entries.
+func (f *Filter) MatchesProject(e entry.Entry) bool {
+	if f.Project == "" {
+		return true
+	}
+	return strings.EqualFold(e.Project, f.Project)
+}
+
 // Matches will be implemented in subsequent subtasks
 func (f *Filter) Matches(e entry.Entry) bool {
 	// Placeholder - will be implemented in subtask 1.5
