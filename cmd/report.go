@@ -643,8 +643,9 @@ func runGroupByProjectReport(cmd *cobra.Command) {
 			reportHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
 		}
 	}
-	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", reportHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, reportHeader)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	for _, group := range groups {
 		// Format project name with special handling for "(no project)"
@@ -655,13 +656,14 @@ func runGroupByProjectReport(cmd *cobra.Command) {
 			projectDisplay = "@" + group.Name
 		}
 
-		_, _ = fmt.Fprintf(deps.Stdout, "%-30s  %10s  (%d %s)\n",
+		_, _ = fmt.Fprintf(deps.Stdout, "  %-28s  %10s  (%d %s)\n",
 			projectDisplay,
 			formatDuration(group.TotalMinutes),
 			group.EntryCount,
 			pluralize("entry", group.EntryCount))
 	}
 
+	_, _ = fmt.Fprintln(deps.Stdout)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
 	_, _ = fmt.Fprintf(deps.Stdout, "Grand Total: %s (%d %s across %d %s)\n",
 		formatDuration(grandTotalMinutes),
@@ -849,8 +851,9 @@ func runGroupByTagReport(cmd *cobra.Command) {
 			reportHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
 		}
 	}
-	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", reportHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, reportHeader)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	for _, group := range groups {
 		// Format tag name with special handling for "(no tags)"
@@ -861,13 +864,14 @@ func runGroupByTagReport(cmd *cobra.Command) {
 			tagDisplay = "#" + group.Name
 		}
 
-		_, _ = fmt.Fprintf(deps.Stdout, "%-30s  %10s  (%d %s)\n",
+		_, _ = fmt.Fprintf(deps.Stdout, "  %-28s  %10s  (%d %s)\n",
 			tagDisplay,
 			formatDuration(group.TotalMinutes),
 			group.EntryCount,
 			pluralize("entry", group.EntryCount))
 	}
 
+	_, _ = fmt.Fprintln(deps.Stdout)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
 	_, _ = fmt.Fprintf(deps.Stdout, "Grand Total: %s (%d %s across %d %s)\n",
 		formatDuration(grandTotalMinutes),
