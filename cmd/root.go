@@ -81,6 +81,10 @@ Report Commands:
   did report @project --last 7                  Project report for last 7 days
   did report --by project --from 2024-01-01 --to 2024-01-31    Project breakdown for date range
 
+Statistics Commands:
+  did stats                                     Show statistics for current week
+  did stats --month                             Show statistics for current month
+
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
 
