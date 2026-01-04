@@ -539,3 +539,705 @@ func TestExportCommand_Exists(t *testing.T) {
 		t.Errorf("Expected json command Use='json', got %q", exportJSONCmd.Use)
 	}
 }
+
+// Date filtering tests
+
+func TestExportJSON_FromFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with different dates
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10), // 10 days ago (before range)
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3), // 3 days ago (in range)
+			Description:     "Recent entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -1), // 1 day ago (in range)
+			Description:     "Yesterday entry",
+			DurationMinutes: 45,
+			RawInput:        "Yesterday entry for 45m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set --from flag to 5 days ago
+	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("from", fromDate)
+	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries from last 5 days (not the 10-day-old entry)
+	if len(result.Entries) != 2 {
+		t.Errorf("Expected 2 entries (from last 5 days), got %d", len(result.Entries))
+	}
+
+	// Verify filter criteria in metadata
+	if result.Metadata.FilterCriteria["from"] == nil {
+		t.Error("Expected 'from' in filter_criteria")
+	}
+}
+
+func TestExportJSON_ToFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with different dates
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10), // 10 days ago (in range)
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3), // 3 days ago (in range)
+			Description:     "Recent entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+		},
+		{
+			Timestamp:       now, // Today (after range)
+			Description:     "Today entry",
+			DurationMinutes: 45,
+			RawInput:        "Today entry for 45m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set --to flag to 5 days ago
+	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("to", toDate)
+	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries up to 5 days ago
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry (older than 5 days), got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Description != "Old entry" {
+		t.Errorf("Expected 'Old entry', got %q", result.Entries[0].Description)
+	}
+
+	// Verify filter criteria in metadata
+	if result.Metadata.FilterCriteria["to"] == nil {
+		t.Error("Expected 'to' in filter_criteria")
+	}
+}
+
+func TestExportJSON_FromAndToFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with different dates
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -15), // 15 days ago (before range)
+			Description:     "Very old entry",
+			DurationMinutes: 60,
+			RawInput:        "Very old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -7), // 7 days ago (in range)
+			Description:     "Week old entry",
+			DurationMinutes: 90,
+			RawInput:        "Week old entry for 1h30m",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5), // 5 days ago (in range)
+			Description:     "Five days old",
+			DurationMinutes: 45,
+			RawInput:        "Five days old for 45m",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2), // 2 days ago (after range)
+			Description:     "Recent entry",
+			DurationMinutes: 30,
+			RawInput:        "Recent entry for 30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set --from and --to flags for 10 days ago to 3 days ago
+	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
+	toDate := now.AddDate(0, 0, -3).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("from", fromDate)
+	exportJSONCmd.Flags().Set("to", toDate)
+	defer exportJSONCmd.Flags().Set("from", "") // Reset flags
+	defer exportJSONCmd.Flags().Set("to", "")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries in the 10-3 day range
+	if len(result.Entries) != 2 {
+		t.Errorf("Expected 2 entries in date range, got %d", len(result.Entries))
+	}
+
+	// Verify correct entries
+	descriptions := []string{}
+	for _, e := range result.Entries {
+		descriptions = append(descriptions, e.Description)
+	}
+
+	expectedDescriptions := []string{"Week old entry", "Five days old"}
+	for _, expected := range expectedDescriptions {
+		found := false
+		for _, desc := range descriptions {
+			if desc == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected entry %q in results", expected)
+		}
+	}
+
+	// Verify filter criteria in metadata
+	if result.Metadata.FilterCriteria["from"] == nil {
+		t.Error("Expected 'from' in filter_criteria")
+	}
+	if result.Metadata.FilterCriteria["to"] == nil {
+		t.Error("Expected 'to' in filter_criteria")
+	}
+}
+
+func TestExportJSON_LastFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with different dates
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10), // 10 days ago (outside range)
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5), // 5 days ago (in range)
+			Description:     "Five days old",
+			DurationMinutes: 90,
+			RawInput:        "Five days old for 1h30m",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2), // 2 days ago (in range)
+			Description:     "Two days old",
+			DurationMinutes: 45,
+			RawInput:        "Two days old for 45m",
+		},
+		{
+			Timestamp:       now, // Today (in range)
+			Description:     "Today entry",
+			DurationMinutes: 30,
+			RawInput:        "Today entry for 30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set --last flag to 7 days
+	exportJSONCmd.Flags().Set("last", "7")
+	defer exportJSONCmd.Flags().Set("last", "0") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries from last 7 days (3 entries)
+	if len(result.Entries) != 3 {
+		t.Errorf("Expected 3 entries from last 7 days, got %d", len(result.Entries))
+	}
+
+	// Verify filter criteria in metadata shows last_days
+	if lastDays, ok := result.Metadata.FilterCriteria["last_days"].(float64); !ok || lastDays != 7 {
+		t.Errorf("Expected last_days=7 in filter_criteria, got %v", result.Metadata.FilterCriteria["last_days"])
+	}
+}
+
+func TestExportJSON_InvalidFromDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set invalid --from date
+	exportJSONCmd.Flags().Set("from", "invalid-date")
+	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid --from date")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Invalid --from date") {
+		t.Errorf("Expected 'Invalid --from date' error, got: %s", stderrOutput)
+	}
+}
+
+func TestExportJSON_InvalidToDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set invalid --to date
+	exportJSONCmd.Flags().Set("to", "2024-13-45") // Invalid month/day
+	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid --to date")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Invalid --to date") {
+		t.Errorf("Expected 'Invalid --to date' error, got: %s", stderrOutput)
+	}
+}
+
+func TestExportJSON_LastWithFromError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set both --last and --from (should error)
+	exportJSONCmd.Flags().Set("last", "7")
+	exportJSONCmd.Flags().Set("from", "2024-01-01")
+	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
+	defer exportJSONCmd.Flags().Set("from", "")
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when using --last with --from")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Cannot use --last with --from") {
+		t.Errorf("Expected error about conflicting flags, got: %s", stderrOutput)
+	}
+}
+
+func TestExportJSON_LastWithToError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set both --last and --to (should error)
+	exportJSONCmd.Flags().Set("last", "7")
+	exportJSONCmd.Flags().Set("to", "2024-12-31")
+	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
+	defer exportJSONCmd.Flags().Set("to", "")
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when using --last with --to")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Cannot use --last with") {
+		t.Errorf("Expected error about conflicting flags, got: %s", stderrOutput)
+	}
+}
+
+func TestExportJSON_LastWithBothFromAndToError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set --last with both --from and --to (should error)
+	exportJSONCmd.Flags().Set("last", "7")
+	exportJSONCmd.Flags().Set("from", "2024-01-01")
+	exportJSONCmd.Flags().Set("to", "2024-12-31")
+	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when using --last with --from and --to")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Cannot use --last with") {
+		t.Errorf("Expected error about conflicting flags, got: %s", stderrOutput)
+	}
+}
+
+func TestExportJSON_FromOnlyIncludesUpToNow(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10), // 10 days ago (before from)
+			Description:     "Old entry",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3), // 3 days ago (after from)
+			Description:     "Recent entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set only --from flag (should include up to now)
+	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("from", fromDate)
+	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should include entry from 3 days ago but not 10 days ago
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Description != "Recent entry" {
+		t.Errorf("Expected 'Recent entry', got %q", result.Entries[0].Description)
+	}
+}
+
+func TestExportJSON_ToOnlyIncludesFromBeginning(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, -6, 0), // 6 months ago (before to)
+			Description:     "Very old entry",
+			DurationMinutes: 60,
+			RawInput:        "Very old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2), // 2 days ago (after to)
+			Description:     "Recent entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set only --to flag (should include from beginning)
+	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("to", toDate)
+	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should include old entry but not recent entry
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Description != "Very old entry" {
+		t.Errorf("Expected 'Very old entry', got %q", result.Entries[0].Description)
+	}
+}
+
+func TestExportJSON_EuropeanDateFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Date(2024, 6, 15, 10, 0, 0, 0, time.Local),
+		Description:     "Test entry",
+		DurationMinutes: 60,
+		RawInput:        "Test entry for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Use European date format (DD/MM/YYYY)
+	exportJSONCmd.Flags().Set("from", "01/06/2024") // June 1, 2024
+	exportJSONCmd.Flags().Set("to", "30/06/2024")   // June 30, 2024
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should include the entry
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry with European date format, got %d", len(result.Entries))
+	}
+}
+
+func TestExportJSON_PartialDateError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set partial date (missing day)
+	exportJSONCmd.Flags().Set("from", "2024-01") // Year-Month only
+	defer exportJSONCmd.Flags().Set("from", "")
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for partial date")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Invalid --from date") {
+		t.Errorf("Expected invalid date error, got: %s", stderrOutput)
+	}
+}
