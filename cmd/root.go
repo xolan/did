@@ -60,9 +60,7 @@ Projects and Tags:
 				// Successfully parsed as a date - list entries for that day
 				endDate := timeutil.EndOfDay(date)
 				periodDesc := formatDateRangeForDisplay(date, endDate)
-				listEntries(periodDesc, func() (start, end time.Time) {
-					return date, endDate
-				})
+				listEntriesForRange(periodDesc, date, endDate)
 				return
 			}
 		}
@@ -238,7 +236,14 @@ func createEntry(args []string) {
 }
 
 // listEntries reads and displays entries filtered by the given time range
+// This function accepts a function that returns start/end times for backward compatibility
 func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
+	start, end := timeRangeFunc()
+	listEntriesForRange(period, start, end)
+}
+
+// listEntriesForRange reads and displays entries filtered by explicit start/end times
+func listEntriesForRange(period string, start, end time.Time) {
 	storagePath, err := deps.StoragePath()
 	if err != nil {
 		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine storage location")
@@ -267,7 +272,6 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	}
 
 	entries := result.Entries
-	start, end := timeRangeFunc()
 
 	// Filter entries by time range
 	var filtered []entry.Entry
@@ -305,6 +309,27 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 	}
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
 	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s\n", formatDuration(totalMinutes))
+}
+
+// formatDateRangeForDisplay formats a date range for human-readable display
+// Used for custom date range queries to generate appropriate period descriptions
+func formatDateRangeForDisplay(start, end time.Time) string {
+	// If same day, show single date
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		return start.Format("Mon, Jan 2, 2006")
+	}
+
+	// If same year, don't repeat the year
+	if start.Year() == end.Year() {
+		return fmt.Sprintf("%s - %s",
+			start.Format("Jan 2"),
+			end.Format("Jan 2, 2006"))
+	}
+
+	// Different years, show both
+	return fmt.Sprintf("%s - %s",
+		start.Format("Jan 2, 2006"),
+		end.Format("Jan 2, 2006"))
 }
 
 // formatCorruptionWarning formats a ParseWarning into a human-readable string

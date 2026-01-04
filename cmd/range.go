@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/timeutil"
@@ -118,27 +117,5 @@ func handleFromCommand(args []string) {
 	periodDesc := formatDateRangeForDisplay(startDate, endDate)
 
 	// List entries using the custom time range
-	listEntries(periodDesc, func() (start, end time.Time) {
-		return startDate, endDate
-	})
-}
-
-// formatDateRangeForDisplay formats a date range for human-readable display
-func formatDateRangeForDisplay(start, end time.Time) string {
-	// If same day, show single date
-	if start.Format("2006-01-02") == end.Format("2006-01-02") {
-		return start.Format("Mon, Jan 2, 2006")
-	}
-
-	// If same year, don't repeat the year
-	if start.Year() == end.Year() {
-		return fmt.Sprintf("%s - %s",
-			start.Format("Jan 2"),
-			end.Format("Jan 2, 2006"))
-	}
-
-	// Different years, show both
-	return fmt.Sprintf("%s - %s",
-		start.Format("Jan 2, 2006"),
-		end.Format("Jan 2, 2006"))
+	listEntriesForRange(periodDesc, startDate, endDate)
 }

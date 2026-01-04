@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/timeutil"
@@ -56,7 +55,5 @@ func handleLastCommand(args []string) {
 	periodDesc := formatDateRangeForDisplay(startDate, endDate)
 
 	// List entries using the custom time range
-	listEntries(periodDesc, func() (start, end time.Time) {
-		return startDate, endDate
-	})
+	listEntriesForRange(periodDesc, startDate, endDate)
 }
