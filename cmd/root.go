@@ -62,6 +62,20 @@ Projects and Tags:
 				periodDesc := formatDateRangeForDisplay(date, endDate)
 				listEntriesForRange(periodDesc, date, endDate)
 				return
+			} else {
+				// Single argument without 'for' keyword failed to parse as date
+				// Show helpful error message about date format OR entry creation
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid date or missing 'for' keyword\n")
+				_, _ = fmt.Fprintln(deps.Stderr)
+				_, _ = fmt.Fprintln(deps.Stderr, "If querying a date, use format YYYY-MM-DD or DD/MM/YYYY:")
+				_, _ = fmt.Fprintln(deps.Stderr, "  did 2024-01-15")
+				_, _ = fmt.Fprintln(deps.Stderr, "  did 15/01/2024")
+				_, _ = fmt.Fprintln(deps.Stderr)
+				_, _ = fmt.Fprintln(deps.Stderr, "If creating an entry, include 'for <duration>':")
+				_, _ = fmt.Fprintln(deps.Stderr, "  did <description> for <duration>")
+				_, _ = fmt.Fprintln(deps.Stderr, "  did feature X for 2h")
+				deps.Exit(1)
+				return
 			}
 		}
 

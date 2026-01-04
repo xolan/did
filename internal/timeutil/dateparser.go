@@ -18,7 +18,7 @@ import (
 // Invalid inputs return an error with suggested formats.
 func ParseDate(input string) (time.Time, error) {
 	if input == "" {
-		return time.Time{}, fmt.Errorf("invalid date: empty string")
+		return time.Time{}, fmt.Errorf("date cannot be empty (use format YYYY-MM-DD or DD/MM/YYYY, e.g., 2024-01-15 or 15/01/2024)")
 	}
 
 	// Try ISO format first (YYYY-MM-DD) - preferred for ambiguous dates
@@ -33,8 +33,33 @@ func ParseDate(input string) (time.Time, error) {
 		return StartOfDay(t), nil
 	}
 
-	// Neither format worked
-	return time.Time{}, fmt.Errorf("invalid date format: expected YYYY-MM-DD or DD/MM/YYYY, got %s", input)
+	// Neither format worked - provide specific error based on input pattern
+	return time.Time{}, buildDateParseError(input)
+}
+
+// buildDateParseError creates a helpful error message based on the input pattern
+func buildDateParseError(input string) error {
+	// Check for common partial date patterns
+	isoPartialRe := regexp.MustCompile(`^\d{4}-\d{1,2}$`)          // YYYY-MM (missing day)
+	yearOnlyRe := regexp.MustCompile(`^\d{4}$`)                    // YYYY (year only)
+	isoPartialDayRe := regexp.MustCompile(`^\d{1,2}-\d{1,2}$`)     // MM-DD or DD-MM (missing year)
+	euroPartialRe := regexp.MustCompile(`^\d{1,2}/\d{1,2}$`)       // DD/MM (missing year)
+	tooManyPartsRe := regexp.MustCompile(`^\d+[-/]\d+[-/]\d+[-/]`) // Too many separators
+
+	switch {
+	case yearOnlyRe.MatchString(input):
+		return fmt.Errorf("incomplete date '%s': missing month and day (use format YYYY-MM-DD, e.g., %s-01-15)", input, input)
+	case isoPartialRe.MatchString(input):
+		return fmt.Errorf("incomplete date '%s': missing day (use format YYYY-MM-DD, e.g., %s-15)", input, input)
+	case isoPartialDayRe.MatchString(input):
+		return fmt.Errorf("incomplete date '%s': missing year (use format YYYY-MM-DD or DD/MM/YYYY, e.g., 2024-%s)", input, input)
+	case euroPartialRe.MatchString(input):
+		return fmt.Errorf("incomplete date '%s': missing year (use format DD/MM/YYYY, e.g., %s/2024)", input, input)
+	case tooManyPartsRe.MatchString(input):
+		return fmt.Errorf("invalid date '%s': too many date parts (use format YYYY-MM-DD or DD/MM/YYYY)", input)
+	default:
+		return fmt.Errorf("invalid date format '%s' (use YYYY-MM-DD or DD/MM/YYYY, e.g., 2024-01-15 or 15/01/2024)", input)
+	}
 }
 
 // ParseRelativeDays parses relative day expressions like "last N days".
@@ -49,7 +74,7 @@ func ParseDate(input string) (time.Time, error) {
 // Invalid inputs return an error with suggested format.
 func ParseRelativeDays(input string) (start, end time.Time, err error) {
 	if input == "" {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid relative date: empty string")
+		return time.Time{}, time.Time{}, fmt.Errorf("relative date cannot be empty (use format 'last N days', e.g., 'last 7 days')")
 	}
 
 	// Match "last N days" or "last N day" (singular)
@@ -58,7 +83,7 @@ func ParseRelativeDays(input string) (start, end time.Time, err error) {
 	matches := re.FindStringSubmatch(input)
 
 	if matches == nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid relative date format: expected 'last N days', got %s", input)
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid format '%s' (use 'last N days' or 'last N day', e.g., 'last 7 days', 'last 30 days', 'last 1 day')", input)
 	}
 
 	// Extract the number of days

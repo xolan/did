@@ -40,13 +40,12 @@ func handleLastCommand(args []string) {
 	// Parse the relative date expression using the parser
 	startDate, endDate, err := timeutil.ParseRelativeDays(expression)
 	if err != nil {
-		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid relative date expression '%s'\n", expression)
-		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Use format 'last N days' or 'last N day'")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr)
 		_, _ = fmt.Fprintln(deps.Stderr, "Examples:")
-		_, _ = fmt.Fprintln(deps.Stderr, "  did last 7 days")
-		_, _ = fmt.Fprintln(deps.Stderr, "  did last 30 days")
-		_, _ = fmt.Fprintln(deps.Stderr, "  did last 1 day")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did last 7 days    # Past week")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did last 30 days   # Past month")
+		_, _ = fmt.Fprintln(deps.Stderr, "  did last 1 day     # Today only")
 		deps.Exit(1)
 		return
 	}

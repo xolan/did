@@ -81,10 +81,13 @@ func handleFromCommand(args []string) {
 	// Parse start date
 	startDate, err := timeutil.ParseDate(startDateStr)
 	if err != nil {
-		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid start date '%s'\n", startDateStr)
-		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Use format YYYY-MM-DD or DD/MM/YYYY")
-		_, _ = fmt.Fprintln(deps.Stderr, "Example: 2024-01-15 or 15/01/2024")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr, "Supported date formats:")
+		_, _ = fmt.Fprintln(deps.Stderr, "  YYYY-MM-DD (e.g., 2024-01-15)")
+		_, _ = fmt.Fprintln(deps.Stderr, "  DD/MM/YYYY (e.g., 15/01/2024)")
+		_, _ = fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr, "Example: did from 2024-01-01 to 2024-01-31")
 		deps.Exit(1)
 		return
 	}
@@ -92,10 +95,13 @@ func handleFromCommand(args []string) {
 	// Parse end date
 	endDate, err := timeutil.ParseDate(endDateStr)
 	if err != nil {
-		_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid end date '%s'\n", endDateStr)
-		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Use format YYYY-MM-DD or DD/MM/YYYY")
-		_, _ = fmt.Fprintln(deps.Stderr, "Example: 2024-01-31 or 31/01/2024")
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr, "Supported date formats:")
+		_, _ = fmt.Fprintln(deps.Stderr, "  YYYY-MM-DD (e.g., 2024-01-31)")
+		_, _ = fmt.Fprintln(deps.Stderr, "  DD/MM/YYYY (e.g., 31/01/2024)")
+		_, _ = fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr, "Example: did from 2024-01-01 to 2024-01-31")
 		deps.Exit(1)
 		return
 	}
@@ -105,7 +111,9 @@ func handleFromCommand(args []string) {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: Start date (%s) is after end date (%s)\n",
 			startDate.Format("2006-01-02"),
 			endDate.Format("2006-01-02"))
-		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Ensure start date comes before or equals end date")
+		_, _ = fmt.Fprintln(deps.Stderr)
+		_, _ = fmt.Fprintln(deps.Stderr, "The start date must come before or equal the end date.")
+		_, _ = fmt.Fprintln(deps.Stderr, "Example: did from 2024-01-01 to 2024-01-31")
 		deps.Exit(1)
 		return
 	}
