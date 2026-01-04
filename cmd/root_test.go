@@ -1616,3 +1616,266 @@ func TestCreateEntry_MultipleTags(t *testing.T) {
 		}
 	}
 }
+
+// Integration tests for listing entries with project and tags
+
+func TestListEntries_WithProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with project
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "fix bug",
+		DurationMinutes: 60,
+		RawInput:        "fix bug @acme for 1h",
+		Project:         "acme",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows @project
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [@project])
+	if !strings.Contains(output, "fix bug [@acme]") {
+		t.Errorf("Expected 'fix bug [@acme]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_WithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "implement feature",
+		DurationMinutes: 120,
+		RawInput:        "implement feature #feature #urgent for 2h",
+		Tags:            []string{"feature", "urgent"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows #tags
+	if !strings.Contains(output, "#feature") {
+		t.Errorf("Expected '#feature' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "implement feature") {
+		t.Errorf("Expected 'implement feature' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [#tag1 #tag2])
+	if !strings.Contains(output, "implement feature [#feature #urgent]") {
+		t.Errorf("Expected 'implement feature [#feature #urgent]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_WithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry with both project and tags
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "deploy app",
+		DurationMinutes: 90,
+		RawInput:        "deploy app @clientco #deploy #production for 1h30m",
+		Project:         "clientco",
+		Tags:            []string{"deploy", "production"},
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify output shows @project and #tags
+	if !strings.Contains(output, "@clientco") {
+		t.Errorf("Expected '@clientco' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#deploy") {
+		t.Errorf("Expected '#deploy' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "#production") {
+		t.Errorf("Expected '#production' in list output, got: %s", output)
+	}
+	if !strings.Contains(output, "deploy app") {
+		t.Errorf("Expected 'deploy app' in list output, got: %s", output)
+	}
+	// Verify format is correct (description [@project #tag1 #tag2])
+	if !strings.Contains(output, "deploy app [@clientco #deploy #production]") {
+		t.Errorf("Expected 'deploy app [@clientco #deploy #production]' format in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_BackwardCompatibility_NoProjectOrTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create test entry WITHOUT project or tags (simulating old entries)
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "plain task",
+		DurationMinutes: 45,
+		RawInput:        "plain task for 45m",
+		// No Project or Tags fields set (empty values)
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+	// Verify description is shown without brackets
+	if !strings.Contains(output, "plain task") {
+		t.Errorf("Expected 'plain task' in list output, got: %s", output)
+	}
+	// Verify no project/tag brackets are present
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets in list output for plain entries, got: %s", output)
+	}
+	// Verify the output shows proper formatting (should just be "plain task" without brackets)
+	if strings.Contains(output, "plain task [") {
+		t.Errorf("Did not expect 'plain task [' in list output, got: %s", output)
+	}
+}
+
+func TestListEntries_MixedEntriesWithAndWithoutProjectTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	// Use fixed times within today to avoid edge cases when test runs early in the day
+	todayBase := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, now.Location())
+
+	// Create multiple entries with different combinations
+	testEntries := []entry.Entry{
+		{
+			Timestamp:       todayBase,
+			Description:     "plain entry",
+			DurationMinutes: 30,
+			RawInput:        "plain entry for 30m",
+		},
+		{
+			Timestamp:       todayBase.Add(1 * time.Hour),
+			Description:     "with project",
+			DurationMinutes: 60,
+			RawInput:        "with project @acme for 1h",
+			Project:         "acme",
+		},
+		{
+			Timestamp:       todayBase.Add(2 * time.Hour),
+			Description:     "with tags",
+			DurationMinutes: 45,
+			RawInput:        "with tags #tag1 #tag2 for 45m",
+			Tags:            []string{"tag1", "tag2"},
+		},
+		{
+			Timestamp:       todayBase.Add(3 * time.Hour),
+			Description:     "with both",
+			DurationMinutes: 90,
+			RawInput:        "with both @proj #mytag for 1h30m",
+			Project:         "proj",
+			Tags:            []string{"mytag"},
+		},
+	}
+
+	for _, e := range testEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	listEntries("today", func() (time.Time, time.Time) {
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		end := start.Add(24 * time.Hour)
+		return start, end
+	})
+
+	output := stdout.String()
+
+	// Verify plain entry shows without brackets
+	if !strings.Contains(output, "plain entry") {
+		t.Errorf("Expected 'plain entry' in output, got: %s", output)
+	}
+	// Plain entry should NOT have brackets following it in the format "plain entry ["
+	// But it's hard to check this precisely, so we'll just verify others have correct format
+
+	// Verify entry with project shows @project
+	if !strings.Contains(output, "with project [@acme]") {
+		t.Errorf("Expected 'with project [@acme]' in output, got: %s", output)
+	}
+
+	// Verify entry with tags shows #tags
+	if !strings.Contains(output, "with tags [#tag1 #tag2]") {
+		t.Errorf("Expected 'with tags [#tag1 #tag2]' in output, got: %s", output)
+	}
+
+	// Verify entry with both shows both
+	if !strings.Contains(output, "with both [@proj #mytag]") {
+		t.Errorf("Expected 'with both [@proj #mytag]' in output, got: %s", output)
+	}
+
+	// Verify total is shown
+	if !strings.Contains(output, "Total:") {
+		t.Errorf("Expected 'Total:' in output, got: %s", output)
+	}
+}
