@@ -345,12 +345,12 @@ func formatDuration(minutes int) string {
 	return fmt.Sprintf("%dh %dm", hours, mins)
 }
 
-// formatEntryForLog formats a description with optional project and tags for display
-// Returns format like: "description" or "description [@project]" or "description [#tag1 #tag2]"
-// or "description [@project #tag1 #tag2]"
-func formatEntryForLog(description, project string, tags []string) string {
+// formatProjectAndTags formats project and tags for display
+// Returns format like: "@project" or "#tag1 #tag2" or "@project #tag1 #tag2"
+// Returns empty string if no project or tags
+func formatProjectAndTags(project string, tags []string) string {
 	if project == "" && len(tags) == 0 {
-		return description
+		return ""
 	}
 
 	var parts []string
@@ -361,7 +361,18 @@ func formatEntryForLog(description, project string, tags []string) string {
 		parts = append(parts, "#"+tag)
 	}
 
-	return fmt.Sprintf("%s [%s]", description, strings.Join(parts, " "))
+	return strings.Join(parts, " ")
+}
+
+// formatEntryForLog formats a description with optional project and tags for display
+// Returns format like: "description" or "description [@project]" or "description [#tag1 #tag2]"
+// or "description [@project #tag1 #tag2]"
+func formatEntryForLog(description, project string, tags []string) string {
+	metadata := formatProjectAndTags(project, tags)
+	if metadata == "" {
+		return description
+	}
+	return fmt.Sprintf("%s [%s]", description, metadata)
 }
 
 // editEntry modifies an existing time tracking entry

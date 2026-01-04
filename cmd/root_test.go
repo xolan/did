@@ -939,3 +939,112 @@ func TestValidate_Command(t *testing.T) {
 		t.Errorf("Expected 'Storage file is healthy', got: %s", stdout.String())
 	}
 }
+
+func TestFormatProjectAndTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		project  string
+		tags     []string
+		expected string
+	}{
+		{
+			name:     "empty project and tags",
+			project:  "",
+			tags:     nil,
+			expected: "",
+		},
+		{
+			name:     "empty project and empty tags slice",
+			project:  "",
+			tags:     []string{},
+			expected: "",
+		},
+		{
+			name:     "project only",
+			project:  "acme",
+			tags:     nil,
+			expected: "@acme",
+		},
+		{
+			name:     "single tag only",
+			project:  "",
+			tags:     []string{"bugfix"},
+			expected: "#bugfix",
+		},
+		{
+			name:     "multiple tags only",
+			project:  "",
+			tags:     []string{"bugfix", "urgent"},
+			expected: "#bugfix #urgent",
+		},
+		{
+			name:     "project and single tag",
+			project:  "acme",
+			tags:     []string{"bugfix"},
+			expected: "@acme #bugfix",
+		},
+		{
+			name:     "project and multiple tags",
+			project:  "acme",
+			tags:     []string{"bugfix", "urgent", "frontend"},
+			expected: "@acme #bugfix #urgent #frontend",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatProjectAndTags(tt.project, tt.tags)
+			if result != tt.expected {
+				t.Errorf("formatProjectAndTags(%q, %v) = %q, expected %q", tt.project, tt.tags, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatEntryForLog(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		project     string
+		tags        []string
+		expected    string
+	}{
+		{
+			name:        "description only",
+			description: "fix bug",
+			project:     "",
+			tags:        nil,
+			expected:    "fix bug",
+		},
+		{
+			name:        "description with project",
+			description: "fix bug",
+			project:     "acme",
+			tags:        nil,
+			expected:    "fix bug [@acme]",
+		},
+		{
+			name:        "description with tags",
+			description: "fix bug",
+			project:     "",
+			tags:        []string{"bugfix", "urgent"},
+			expected:    "fix bug [#bugfix #urgent]",
+		},
+		{
+			name:        "description with project and tags",
+			description: "fix bug",
+			project:     "acme",
+			tags:        []string{"bugfix", "urgent"},
+			expected:    "fix bug [@acme #bugfix #urgent]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatEntryForLog(tt.description, tt.project, tt.tags)
+			if result != tt.expected {
+				t.Errorf("formatEntryForLog(%q, %q, %v) = %q, expected %q", tt.description, tt.project, tt.tags, result, tt.expected)
+			}
+		})
+	}
+}
