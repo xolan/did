@@ -1241,3 +1241,612 @@ func TestExportJSON_PartialDateError(t *testing.T) {
 		t.Errorf("Expected invalid date error, got: %s", stderrOutput)
 	}
 }
+
+// Project and tag filtering tests
+
+func TestExportJSON_ProjectFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set --project flag
+	rootCmd.PersistentFlags().Set("project", "acme")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries for project 'acme' (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry for project 'acme', got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Project != "acme" {
+		t.Errorf("Expected project='acme', got %q", result.Entries[0].Project)
+	}
+
+	// Verify filter criteria in metadata
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "acme" {
+		t.Errorf("Expected project='acme' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+}
+
+func TestExportJSON_ProjectShorthand(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set project using -p shorthand
+	rootCmd.PersistentFlags().Set("project", "client")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries for project 'client' (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry for project 'client', got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Project != "client" {
+		t.Errorf("Expected project='client', got %q", result.Entries[0].Project)
+	}
+
+	// Verify filter criteria in metadata
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "client" {
+		t.Errorf("Expected project='client' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+}
+
+func TestExportJSON_TagFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set --tag flag
+	rootCmd.PersistentFlags().Set("tag", "review")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries with tag 'review' (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry with tag 'review', got %d", len(result.Entries))
+	}
+
+	// Verify the entry has the review tag
+	hasReviewTag := false
+	for _, tag := range result.Entries[0].Tags {
+		if tag == "review" {
+			hasReviewTag = true
+			break
+		}
+	}
+	if !hasReviewTag {
+		t.Errorf("Expected entry to have 'review' tag, got %v", result.Entries[0].Tags)
+	}
+
+	// Verify filter criteria in metadata
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok {
+			t.Errorf("Expected tags to be []interface{}, got %T", tagsInterface)
+		} else if len(tagsSlice) != 1 {
+			t.Errorf("Expected 1 tag in filter_criteria, got %d", len(tagsSlice))
+		} else if tagStr, ok := tagsSlice[0].(string); !ok || tagStr != "review" {
+			t.Errorf("Expected tag='review' in filter_criteria, got %v", tagsSlice[0])
+		}
+	}
+}
+
+func TestExportJSON_TagShorthand(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set tag using -t shorthand
+	rootCmd.PersistentFlags().Set("tag", "bugfix")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries with tag 'bugfix' (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry with tag 'bugfix', got %d", len(result.Entries))
+	}
+
+	// Verify the entry has the bugfix tag
+	hasBugfixTag := false
+	for _, tag := range result.Entries[0].Tags {
+		if tag == "bugfix" {
+			hasBugfixTag = true
+			break
+		}
+	}
+	if !hasBugfixTag {
+		t.Errorf("Expected entry to have 'bugfix' tag, got %v", result.Entries[0].Tags)
+	}
+
+	// Verify filter criteria in metadata
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok {
+			t.Errorf("Expected tags to be []interface{}, got %T", tagsInterface)
+		} else if len(tagsSlice) != 1 {
+			t.Errorf("Expected 1 tag in filter_criteria, got %d", len(tagsSlice))
+		} else if tagStr, ok := tagsSlice[0].(string); !ok || tagStr != "bugfix" {
+			t.Errorf("Expected tag='bugfix' in filter_criteria, got %v", tagsSlice[0])
+		}
+	}
+}
+
+func TestExportJSON_MultipleTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with multiple tags
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "API work with multiple tags",
+			DurationMinutes: 120,
+			RawInput:        "API work for 2h",
+			Project:         "backend",
+			Tags:            []string{"api", "review", "urgent"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2),
+			Description:     "Bug fix with api tag",
+			DurationMinutes: 60,
+			RawInput:        "Bug fix for 1h",
+			Project:         "frontend",
+			Tags:            []string{"api", "bugfix"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -1),
+			Description:     "Meeting without api tag",
+			DurationMinutes: 30,
+			RawInput:        "Meeting for 30m",
+			Project:         "",
+			Tags:            []string{"meeting"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set multiple --tag flags
+	rootCmd.PersistentFlags().Set("tag", "api")
+	rootCmd.PersistentFlags().Set("tag", "review")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries with BOTH 'api' AND 'review' tags (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry with both 'api' and 'review' tags, got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Description != "API work with multiple tags" {
+		t.Errorf("Expected 'API work with multiple tags', got %q", result.Entries[0].Description)
+	}
+
+	// Verify filter criteria in metadata
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok {
+			t.Errorf("Expected tags to be []interface{}, got %T", tagsInterface)
+		} else if len(tagsSlice) != 2 {
+			t.Errorf("Expected 2 tags in filter_criteria, got %d", len(tagsSlice))
+		}
+	}
+}
+
+func TestExportJSON_ProjectAndTagCombined(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with various project and tag combinations
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Code review for acme",
+			DurationMinutes: 60,
+			RawInput:        "Code review for 1h",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -4),
+			Description:     "Bug fix for acme",
+			DurationMinutes: 90,
+			RawInput:        "Bug fix for 1h30m",
+			Project:         "acme",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "Code review for client",
+			DurationMinutes: 45,
+			RawInput:        "Code review for 45m",
+			Project:         "client",
+			Tags:            []string{"review"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set both --project and --tag flags
+	rootCmd.PersistentFlags().Set("project", "acme")
+	rootCmd.PersistentFlags().Set("tag", "review")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include entries for project 'acme' with tag 'review' (1 entry)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry for project 'acme' with tag 'review', got %d", len(result.Entries))
+	}
+
+	if result.Entries[0].Description != "Code review for acme" {
+		t.Errorf("Expected 'Code review for acme', got %q", result.Entries[0].Description)
+	}
+
+	// Verify both filters in metadata
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "acme" {
+		t.Errorf("Expected project='acme' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+
+	// Verify tags in filter criteria
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		// JSON unmarshals string slices as []interface{}
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok {
+			t.Errorf("Expected tags to be []interface{}, got %T", tagsInterface)
+		} else if len(tagsSlice) != 1 {
+			t.Errorf("Expected 1 tag in filter_criteria, got %d", len(tagsSlice))
+		} else if tagStr, ok := tagsSlice[0].(string); !ok || tagStr != "review" {
+			t.Errorf("Expected tag='review' in filter_criteria, got %v", tagsSlice[0])
+		}
+	}
+}
+
+func TestExportJSON_ProjectWithDateFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries with different dates and projects
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -10), // 10 days ago
+			Description:     "Old acme work",
+			DurationMinutes: 60,
+			RawInput:        "Old acme work for 1h",
+			Project:         "acme",
+			Tags:            []string{},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3), // 3 days ago
+			Description:     "Recent acme work",
+			DurationMinutes: 90,
+			RawInput:        "Recent acme work for 1h30m",
+			Project:         "acme",
+			Tags:            []string{},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2), // 2 days ago
+			Description:     "Recent client work",
+			DurationMinutes: 45,
+			RawInput:        "Recent client work for 45m",
+			Project:         "client",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Set --project and --last flags
+	rootCmd.PersistentFlags().Set("project", "acme")
+	exportJSONCmd.Flags().Set("last", "7")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+	defer rootCmd.PersistentFlags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should only include recent acme work (last 7 days, project acme)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry for project 'acme' in last 7 days, got %d", len(result.Entries))
+		for i, e := range result.Entries {
+			t.Logf("Entry %d: %s (project=%s)", i, e.Description, e.Project)
+		}
+	} else {
+		if result.Entries[0].Description != "Recent acme work" {
+			t.Errorf("Expected 'Recent acme work', got %q", result.Entries[0].Description)
+		}
+	}
+
+	// Verify both filters in metadata
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "acme" {
+		t.Errorf("Expected project='acme' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+
+	if lastDays, ok := result.Metadata.FilterCriteria["last_days"].(float64); !ok || lastDays != 7 {
+		t.Errorf("Expected last_days=7 in filter_criteria, got %v", result.Metadata.FilterCriteria["last_days"])
+	}
+}
+
+func TestExportJSON_NoMatchingProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set --project flag for non-existent project
+	rootCmd.PersistentFlags().Set("project", "nonexistent")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should return empty entries array
+	if len(result.Entries) != 0 {
+		t.Errorf("Expected 0 entries for non-existent project, got %d", len(result.Entries))
+	}
+
+	// Verify metadata still shows the filter
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "nonexistent" {
+		t.Errorf("Expected project='nonexistent' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+
+	if result.Metadata.TotalEntries != 0 {
+		t.Errorf("Expected total_entries=0, got %d", result.Metadata.TotalEntries)
+	}
+}
+
+func TestExportJSON_NoMatchingTag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	createExportTestEntries(t, storagePath)
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first to ensure clean state
+	resetFilterFlags(exportJSONCmd)
+
+	// Set --tag flag for non-existent tag
+	rootCmd.PersistentFlags().Set("tag", "nonexistent")
+	defer resetFilterFlags(exportJSONCmd) // Reset flags
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Should return empty entries array
+	if len(result.Entries) != 0 {
+		t.Errorf("Expected 0 entries for non-existent tag, got %d", len(result.Entries))
+	}
+
+	// Verify metadata still shows the filter
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok {
+			t.Errorf("Expected tags to be []interface{}, got %T", tagsInterface)
+		} else if len(tagsSlice) != 1 {
+			t.Errorf("Expected 1 tag in filter_criteria, got %d", len(tagsSlice))
+		} else if tagStr, ok := tagsSlice[0].(string); !ok || tagStr != "nonexistent" {
+			t.Errorf("Expected tag='nonexistent' in filter_criteria, got %v", tagsSlice[0])
+		}
+	}
+
+	if result.Metadata.TotalEntries != 0 {
+		t.Errorf("Expected total_entries=0, got %d", result.Metadata.TotalEntries)
+	}
+}
