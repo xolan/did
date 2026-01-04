@@ -64,6 +64,12 @@ did purge --yes                   # Permanently remove all soft-deleted entries 
 did validate                      # Check storage file health
 did restore                       # Restore from most recent backup
 did restore <n>                   # Restore from backup #n (1-3)
+did report @project               # Show all entries for a specific project with totals
+did report #tag                   # Show all entries with a specific tag
+did report --by project           # Show hours grouped by all projects
+did report --by tag               # Show hours grouped by all tags
+did report @project --last 7      # Project report for last 7 days
+did report --by project --from 2024-01-01 --to 2024-01-31  # Project breakdown for date range
 ```
 
 Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.
