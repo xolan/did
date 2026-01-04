@@ -14,6 +14,10 @@ A simple CLI tool for tracking time spent on tasks.
 - Simple duration format (hours and minutes)
 - Data stored locally in JSONL format
 
+## Test coverage
+
+![TestCoverage](https://codecov.io/github/xolan/did/graphs/tree.svg?token=54AUNJMJVP)
+
 ## Prerequisites
 
 - **Go 1.25+** - Required to build the project
