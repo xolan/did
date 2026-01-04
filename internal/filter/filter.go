@@ -63,6 +63,29 @@ func (f *Filter) MatchesProject(e entry.Entry) bool {
 	return strings.EqualFold(e.Project, f.Project)
 }
 
+// MatchesTags returns true if the entry has ALL specified tags (case-insensitive).
+// An empty tags filter matches all entries.
+func (f *Filter) MatchesTags(e entry.Entry) bool {
+	if len(f.Tags) == 0 {
+		return true
+	}
+
+	// Entry must have all filter tags (AND logic)
+	for _, filterTag := range f.Tags {
+		found := false
+		for _, entryTag := range e.Tags {
+			if strings.EqualFold(entryTag, filterTag) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // Matches will be implemented in subsequent subtasks
 func (f *Filter) Matches(e entry.Entry) bool {
 	// Placeholder - will be implemented in subtask 1.5
