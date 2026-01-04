@@ -96,16 +96,20 @@ func deleteEntry(indexStr string) {
 		}
 	}
 
-	// Delete the entry
-	deletedEntry, err := storage.DeleteEntry(storagePath, internalIndex)
+	// Soft delete the entry (marks as deleted instead of removing)
+	deletedEntry, err := storage.SoftDeleteEntry(storagePath, internalIndex)
 	if err != nil {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to delete entry: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
+	// Clean up old deleted entries (>7 days old)
+	_, _ = storage.CleanupOldDeleted(storagePath)
+
 	// Show success message
 	_, _ = fmt.Fprintf(deps.Stdout, "Deleted: %s (%s)\n", deletedEntry.Description, formatDuration(deletedEntry.DurationMinutes))
+	_, _ = fmt.Fprintf(deps.Stdout, "Tip: Use 'did undo' to recover this entry if needed\n")
 }
 
 // showEntryForDeletion displays the entry that is about to be deleted

@@ -91,13 +91,19 @@ func TestDeleteEntry_Success(t *testing.T) {
 		t.Errorf("Expected 'Deleted:' in output, got: %s", output)
 	}
 
-	// Verify entry was deleted
-	remaining, _ := storage.ReadEntries(storagePath)
-	if len(remaining) != 1 {
-		t.Errorf("Expected 1 remaining entry, got %d", len(remaining))
+	// Verify entry was soft deleted (marked as deleted, not removed)
+	allEntries, _ := storage.ReadEntries(storagePath)
+	if len(allEntries) != 2 {
+		t.Errorf("Expected 2 total entries (with deleted), got %d", len(allEntries))
 	}
-	if remaining[0].Description != "entry two" {
-		t.Errorf("Expected 'entry two' to remain, got: %s", remaining[0].Description)
+
+	// Verify only one active entry remains
+	activeEntries, _ := storage.ReadActiveEntries(storagePath)
+	if len(activeEntries) != 1 {
+		t.Errorf("Expected 1 active entry, got %d", len(activeEntries))
+	}
+	if activeEntries[0].Description != "entry two" {
+		t.Errorf("Expected 'entry two' to remain active, got: %s", activeEntries[0].Description)
 	}
 }
 
@@ -282,10 +288,10 @@ func TestDeleteEntry_ConfirmationNo(t *testing.T) {
 		t.Errorf("Expected 'Deletion cancelled', got: %s", stdout.String())
 	}
 
-	// Verify entry was NOT deleted
-	entries, _ := storage.ReadEntries(storagePath)
-	if len(entries) != 1 {
-		t.Errorf("Expected entry to still exist, got %d entries", len(entries))
+	// Verify entry was NOT deleted (should still be active)
+	activeEntries, _ := storage.ReadActiveEntries(storagePath)
+	if len(activeEntries) != 1 {
+		t.Errorf("Expected entry to still be active, got %d active entries", len(activeEntries))
 	}
 }
 
@@ -325,10 +331,16 @@ func TestDeleteEntry_ConfirmationYes(t *testing.T) {
 		t.Errorf("Expected 'Deleted:', got: %s", stdout.String())
 	}
 
-	// Verify entry was deleted
-	entries, _ := storage.ReadEntries(storagePath)
-	if len(entries) != 0 {
-		t.Errorf("Expected entry to be deleted, got %d entries", len(entries))
+	// Verify entry was soft deleted (exists but not active)
+	allEntries, _ := storage.ReadEntries(storagePath)
+	if len(allEntries) != 1 {
+		t.Errorf("Expected 1 entry in storage (soft deleted), got %d entries", len(allEntries))
+	}
+
+	// Verify no active entries remain
+	activeEntries, _ := storage.ReadActiveEntries(storagePath)
+	if len(activeEntries) != 0 {
+		t.Errorf("Expected 0 active entries, got %d active entries", len(activeEntries))
 	}
 }
 
