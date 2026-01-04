@@ -608,3 +608,65 @@ func TestEditCommand_Run(t *testing.T) {
 		t.Errorf("Expected 'Updated entry 1', got: %s", stdout.String())
 	}
 }
+
+func TestDeleteEntry_WithSoftDeletedEntries(t *testing.T) {
+	// Setup: Create temp storage with 3 entries
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create 3 entries
+	entries := []entry.Entry{
+		{Timestamp: time.Now(), Description: "entry 1", DurationMinutes: 60, RawInput: "entry 1 for 1h"},
+		{Timestamp: time.Now(), Description: "entry 2", DurationMinutes: 120, RawInput: "entry 2 for 2h"},
+		{Timestamp: time.Now(), Description: "entry 3", DurationMinutes: 180, RawInput: "entry 3 for 3h"},
+	}
+	for _, e := range entries {
+		_ = storage.AppendEntry(storagePath, e)
+	}
+
+	// Soft delete entry at storage index 0 (entry 1)
+	_, _ = storage.SoftDeleteEntry(storagePath, 0)
+
+	// Now only entry 2 and entry 3 are active
+	// User sees: [1] entry 2, [2] entry 3
+	// Storage: [0] entry 1 (deleted), [1] entry 2 (active), [2] entry 3 (active)
+
+	// Setup test deps
+	var stdout, stderr bytes.Buffer
+	d := &Deps{
+		Stdout:      &stdout,
+		Stderr:      &stderr,
+		Stdin:       strings.NewReader("y\n"),
+		Exit:        func(code int) {},
+		StoragePath: func() (string, error) { return storagePath, nil },
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	yesFlag = true
+	defer func() { yesFlag = false }()
+
+	// Delete index 1 (which should be entry 2, not entry 1!)
+	deleteEntry("1")
+
+	// Verify: Read all entries
+	allEntries, _ := storage.ReadEntries(storagePath)
+
+	// Check that entry 2 is deleted (storage index 1)
+	if allEntries[1].DeletedAt == nil {
+		t.Errorf("Expected entry 2 (storage index 1) to be deleted, but DeletedAt is nil")
+	}
+
+	// Check that entry 3 is still active (storage index 2)
+	if allEntries[2].DeletedAt != nil {
+		t.Errorf("Expected entry 3 (storage index 2) to remain active, but DeletedAt is set")
+	}
+
+	// Verify stdout shows correct entry description
+	if !strings.Contains(stdout.String(), "entry 2") {
+		t.Errorf("Expected confirmation to show 'entry 2', got: %s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "entry 1") {
+		t.Errorf("Confirmation incorrectly shows 'entry 1' instead of 'entry 2'")
+	}
+}

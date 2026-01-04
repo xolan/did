@@ -59,31 +59,47 @@ func deleteEntry(indexStr string) {
 		return
 	}
 
-	// Read all entries to validate index bounds
-	entries, err := storage.ReadEntries(storagePath)
+	// Read all entries
+	allEntries, err := storage.ReadEntries(storagePath)
 	if err != nil {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to read entries: %v\n", err)
 		deps.Exit(1)
 		return
 	}
 
-	// Check if there are any entries
-	if len(entries) == 0 {
+	// Filter to active entries only and create index mapping
+	// Users should only be able to delete active (non-deleted) entries
+	var activeEntries []entry.Entry
+	var storageIndices []int // Maps active entry index to storage index
+	for i, e := range allEntries {
+		if e.DeletedAt == nil {
+			activeEntries = append(activeEntries, e)
+			storageIndices = append(storageIndices, i)
+		}
+	}
+
+	// Check if there are any active entries
+	if len(activeEntries) == 0 {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: No entries to delete\n")
 		deps.Exit(1)
 		return
 	}
 
-	// Validate index is within bounds (convert to 0-based)
-	internalIndex := userIndex - 1
-	if internalIndex >= len(entries) {
-		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index %d out of range. Valid range: 1-%d\n", userIndex, len(entries))
+	// Convert 1-based user index to 0-based active entry index
+	activeIndex := userIndex - 1
+
+	// Validate index is within bounds of active entries
+	if activeIndex < 0 || activeIndex >= len(activeEntries) {
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: Index %d out of range. Valid range: 1-%d\n", userIndex, len(activeEntries))
 		deps.Exit(1)
 		return
 	}
 
-	// Get the entry to delete
-	entryToDelete := entries[internalIndex]
+	// Get the entry to delete (from active entries)
+	entryToDelete := activeEntries[activeIndex]
+
+	// Get the actual storage index for this entry
+	storageIndex := storageIndices[activeIndex]
 
 	// Show the entry being deleted
 	showEntryForDeletion(entryToDelete)
@@ -97,7 +113,7 @@ func deleteEntry(indexStr string) {
 	}
 
 	// Soft delete the entry (marks as deleted instead of removing)
-	deletedEntry, err := storage.SoftDeleteEntry(storagePath, internalIndex)
+	deletedEntry, err := storage.SoftDeleteEntry(storagePath, storageIndex)
 	if err != nil {
 		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to delete entry: %v\n", err)
 		deps.Exit(1)
