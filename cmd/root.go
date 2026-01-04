@@ -271,7 +271,7 @@ func listEntries(period string, timeRangeFunc func() (time.Time, time.Time)) {
 			maxIndexWidth,
 			i+1, // 1-based index for user reference
 			e.Timestamp.Format("15:04"),
-			e.Description,
+			formatEntryForLog(e.Description, e.Project, e.Tags),
 			formatDuration(e.DurationMinutes))
 	}
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
