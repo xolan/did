@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/entry"
+	"github.com/xolan/did/internal/filter"
 	"github.com/xolan/did/internal/storage"
 	"github.com/xolan/did/internal/timeutil"
 )
@@ -38,13 +39,25 @@ Date Filtering:
   Use --from and --to to filter by date range
   Use --last to filter by relative days (e.g., 'last 7 days')
 
+Project and Tag Filtering:
+  Use --project to filter by project
+  Use --tag to filter by tags (can be repeated)
+  Use @project shorthand for --project
+  Use #tag shorthand for --tag
+
 Examples:
   did export json                          Export all entries as JSON
   did export json > backup.json            Export to file
   did export json --from 2024-01-01        Export from a specific date
   did export json --from 2024-01-01 --to 2024-01-31    Export within date range
-  did export json --last 7                 Export last 7 days`,
+  did export json --last 7                 Export last 7 days
+  did export json --project acme           Export entries for project 'acme'
+  did export json --tag review             Export entries tagged 'review'
+  did export json @acme #review            Export using shorthand syntax
+  did export json --last 30 --project acme Export last 30 days for project`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
 		exportJSON(cmd)
 	},
 }
@@ -57,6 +70,8 @@ func init() {
 	exportJSONCmd.Flags().String("from", "", "Start date for filtering (YYYY-MM-DD or DD/MM/YYYY)")
 	exportJSONCmd.Flags().String("to", "", "End date for filtering (YYYY-MM-DD or DD/MM/YYYY)")
 	exportJSONCmd.Flags().Int("last", 0, "Filter by last N days (e.g., --last 7 for last 7 days)")
+
+	// Note: --project and --tag flags are inherited from root command's PersistentFlags
 }
 
 // exportJSON handles the export json command logic
@@ -159,6 +174,16 @@ func exportJSON(cmd *cobra.Command) {
 		entries = filtered
 	}
 
+	// Get project and tag filter flags from root persistent flags
+	projectFilter, _ := cmd.Root().PersistentFlags().GetString("project")
+	tagFilters, _ := cmd.Root().PersistentFlags().GetStringSlice("tag")
+
+	// Apply project and tag filters if specified
+	f := filter.NewFilter("", projectFilter, tagFilters)
+	if !f.IsEmpty() {
+		entries = filter.FilterEntries(entries, f)
+	}
+
 	// Create output structure with metadata
 	output := struct {
 		Metadata struct {
@@ -185,6 +210,14 @@ func exportJSON(cmd *cobra.Command) {
 				output.Metadata.FilterCriteria["to"] = endDate.Format("2006-01-02")
 			}
 		}
+	}
+
+	// Add project and tag filter criteria to metadata if applicable
+	if projectFilter != "" {
+		output.Metadata.FilterCriteria["project"] = projectFilter
+	}
+	if len(tagFilters) > 0 {
+		output.Metadata.FilterCriteria["tags"] = tagFilters
 	}
 
 	output.Entries = entries
