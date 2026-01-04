@@ -179,3 +179,9 @@ func CalculateTagBreakdown(entries []entry.Entry, start, end time.Time) []TagBre
 
 	return breakdowns
 }
+
+// CompareStatistics computes the difference between current and previous period statistics.
+// Returns the difference in minutes (positive if current > previous, negative if current < previous).
+func CompareStatistics(current, previous Statistics) int {
+	return current.TotalMinutes - previous.TotalMinutes
+}
