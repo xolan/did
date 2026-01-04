@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/xolan/did/internal/entry"
 )
@@ -145,6 +146,32 @@ func WriteEntries(filepath string, entries []entry.Entry) error {
 	}
 
 	return nil
+}
+
+// SoftDeleteEntry marks an entry as deleted by setting its DeletedAt timestamp.
+// Index is 0-based. Returns an error if the index is out of bounds.
+// The entry remains in the file but is marked as deleted.
+func SoftDeleteEntry(filepath string, index int) (entry.Entry, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return entry.Entry{}, err
+	}
+
+	if index < 0 || index >= len(entries) {
+		return entry.Entry{}, fmt.Errorf("index %d out of bounds (0-%d)", index, len(entries)-1)
+	}
+
+	// Set DeletedAt to current time
+	now := time.Now()
+	entries[index].DeletedAt = &now
+
+	deleted := entries[index]
+
+	if err := WriteEntries(filepath, entries); err != nil {
+		return entry.Entry{}, err
+	}
+
+	return deleted, nil
 }
 
 // DeleteEntry deletes the entry at the given index and returns it.
