@@ -77,4 +77,5 @@ Entries stored in JSONL format at `~/.config/did/entries.jsonl` (Linux), uses `o
 
 ## Development help
 
-If running in a sandboxed environment with strict permissions on what you can run, execute commands through `bash -c`.
+- If running in a sandboxed environment with strict permissions on what you can run, execute commands through `bash -c`.
+- Always keep documentation up to date. This includes _all_ markdown files, and code docstrings.
