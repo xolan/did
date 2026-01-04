@@ -1850,3 +1850,624 @@ func TestExportJSON_NoMatchingTag(t *testing.T) {
 		t.Errorf("Expected total_entries=0, got %d", result.Metadata.TotalEntries)
 	}
 }
+
+// Integration tests combining multiple filter types
+
+func TestExportJSON_Integration_ProjectTagAndDateRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create diverse test data
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -15),
+			Description:     "Old acme review",
+			DurationMinutes: 60,
+			RawInput:        "Old acme review for 1h",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -7),
+			Description:     "Recent acme review",
+			DurationMinutes: 90,
+			RawInput:        "Recent acme review for 1h30m",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -6),
+			Description:     "Recent acme bugfix",
+			DurationMinutes: 45,
+			RawInput:        "Recent acme bugfix for 45m",
+			Project:         "acme",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Recent client review",
+			DurationMinutes: 30,
+			RawInput:        "Recent client review for 30m",
+			Project:         "client",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2),
+			Description:     "Very recent acme review",
+			DurationMinutes: 120,
+			RawInput:        "Very recent acme review for 2h",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags first
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("from", "")
+	exportJSONCmd.Flags().Set("to", "")
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Set project='acme', tag='review', and date range (10 days ago to 3 days ago)
+	rootCmd.PersistentFlags().Set("project", "acme")
+	rootCmd.PersistentFlags().Set("tag", "review")
+	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
+	toDate := now.AddDate(0, 0, -3).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("from", fromDate)
+	exportJSONCmd.Flags().Set("to", toDate)
+	defer resetFilterFlags(exportJSONCmd)
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+	defer exportJSONCmd.Flags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nOutput: %s", err, stdout.String())
+	}
+
+	// Should only include "Recent acme review" (7 days ago, project=acme, tag=review, within date range)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry matching all filters, got %d", len(result.Entries))
+		for i, e := range result.Entries {
+			t.Logf("Entry %d: %s (project=%s, tags=%v, timestamp=%v)", i, e.Description, e.Project, e.Tags, e.Timestamp)
+		}
+	}
+
+	if len(result.Entries) > 0 && result.Entries[0].Description != "Recent acme review" {
+		t.Errorf("Expected 'Recent acme review', got %q", result.Entries[0].Description)
+	}
+
+	// Verify complete metadata structure
+	if result.Metadata.TotalEntries != 1 {
+		t.Errorf("Expected total_entries=1, got %d", result.Metadata.TotalEntries)
+	}
+
+	// Verify all filter criteria are present
+	if project, ok := result.Metadata.FilterCriteria["project"].(string); !ok || project != "acme" {
+		t.Errorf("Expected project='acme' in filter_criteria, got %v", result.Metadata.FilterCriteria["project"])
+	}
+
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsInterface == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	} else {
+		tagsSlice, ok := tagsInterface.([]interface{})
+		if !ok || len(tagsSlice) != 1 || tagsSlice[0] != "review" {
+			t.Errorf("Expected tags=['review'] in filter_criteria, got %v", tagsInterface)
+		}
+	}
+
+	if result.Metadata.FilterCriteria["from"] == nil {
+		t.Error("Expected 'from' in filter_criteria")
+	}
+
+	if result.Metadata.FilterCriteria["to"] == nil {
+		t.Error("Expected 'to' in filter_criteria")
+	}
+
+	// Verify timestamp is recent
+	if time.Since(result.Metadata.ExportTimestamp) > time.Minute {
+		t.Errorf("Export timestamp is not recent: %v", result.Metadata.ExportTimestamp)
+	}
+}
+
+func TestExportJSON_Integration_MultipleTagsWithLast(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -20),
+			Description:     "Old entry with both tags",
+			DurationMinutes: 60,
+			RawInput:        "Old entry for 1h",
+			Project:         "backend",
+			Tags:            []string{"api", "urgent"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Recent entry with api only",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+			Project:         "backend",
+			Tags:            []string{"api"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "Recent entry with both tags",
+			DurationMinutes: 120,
+			RawInput:        "Recent entry for 2h",
+			Project:         "backend",
+			Tags:            []string{"api", "urgent"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -1),
+			Description:     "Very recent with urgent only",
+			DurationMinutes: 45,
+			RawInput:        "Very recent for 45m",
+			Project:         "backend",
+			Tags:            []string{"urgent"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("from", "")
+	exportJSONCmd.Flags().Set("to", "")
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Set multiple tags and last 7 days
+	rootCmd.PersistentFlags().Set("tag", "api")
+	rootCmd.PersistentFlags().Set("tag", "urgent")
+	exportJSONCmd.Flags().Set("last", "7")
+	defer resetFilterFlags(exportJSONCmd)
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+	defer exportJSONCmd.Flags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nStderr: %s\nStdout: %s", err, stderr.String(), stdout.String())
+	}
+
+	// Should only include entry with both tags in last 7 days
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry with both tags in last 7 days, got %d", len(result.Entries))
+	}
+
+	if len(result.Entries) > 0 && result.Entries[0].Description != "Recent entry with both tags" {
+		t.Errorf("Expected 'Recent entry with both tags', got %q", result.Entries[0].Description)
+	}
+
+	// Verify metadata
+	if result.Metadata.TotalEntries != 1 {
+		t.Errorf("Expected total_entries=1, got %d", result.Metadata.TotalEntries)
+	}
+
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsSlice, ok := tagsInterface.([]interface{}); !ok || len(tagsSlice) != 2 {
+		t.Errorf("Expected 2 tags in filter_criteria, got %v", tagsInterface)
+	}
+
+	if lastDays, ok := result.Metadata.FilterCriteria["last_days"].(float64); !ok || lastDays != 7 {
+		t.Errorf("Expected last_days=7 in filter_criteria, got %v", result.Metadata.FilterCriteria["last_days"])
+	}
+}
+
+func TestExportJSON_Integration_AllFiltersWithNoMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -5),
+			Description:     "Acme review entry",
+			DurationMinutes: 60,
+			RawInput:        "Acme review for 1h",
+			Project:         "acme",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "Client bugfix entry",
+			DurationMinutes: 90,
+			RawInput:        "Client bugfix for 1h30m",
+			Project:         "client",
+			Tags:            []string{"bugfix"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("from", "")
+	exportJSONCmd.Flags().Set("to", "")
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Set filters that won't match any entry (project=acme, tag=bugfix)
+	rootCmd.PersistentFlags().Set("project", "acme")
+	rootCmd.PersistentFlags().Set("tag", "bugfix")
+	exportJSONCmd.Flags().Set("last", "7")
+	defer resetFilterFlags(exportJSONCmd)
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+	defer exportJSONCmd.Flags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nStderr: %s", err, stderr.String())
+	}
+
+	// Should return empty results
+	if len(result.Entries) != 0 {
+		t.Errorf("Expected 0 entries, got %d", len(result.Entries))
+	}
+
+	if result.Metadata.TotalEntries != 0 {
+		t.Errorf("Expected total_entries=0, got %d", result.Metadata.TotalEntries)
+	}
+
+	// Verify all filters are still in metadata
+	if result.Metadata.FilterCriteria["project"] != "acme" {
+		t.Errorf("Expected project='acme' in filter_criteria")
+	}
+
+	if result.Metadata.FilterCriteria["tags"] == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	}
+
+	if result.Metadata.FilterCriteria["last_days"] == nil {
+		t.Error("Expected 'last_days' in filter_criteria")
+	}
+
+	// Verify JSON structure is still valid with empty entries
+	if result.Entries == nil {
+		t.Error("Expected entries array to be initialized (not nil)")
+	}
+}
+
+func TestExportJSON_Integration_ProjectTagAndFrom(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -30),
+			Description:     "Very old matching entry",
+			DurationMinutes: 60,
+			RawInput:        "Very old for 1h",
+			Project:         "frontend",
+			Tags:            []string{"feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -8),
+			Description:     "Recent matching entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent for 1h30m",
+			Project:         "frontend",
+			Tags:            []string{"feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -7),
+			Description:     "Recent non-matching project",
+			DurationMinutes: 45,
+			RawInput:        "Recent for 45m",
+			Project:         "backend",
+			Tags:            []string{"feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -6),
+			Description:     "Recent non-matching tag",
+			DurationMinutes: 30,
+			RawInput:        "Recent for 30m",
+			Project:         "frontend",
+			Tags:            []string{"bugfix"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("from", "")
+	exportJSONCmd.Flags().Set("to", "")
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Filter: project=frontend, tag=feature, from=10 days ago
+	rootCmd.PersistentFlags().Set("project", "frontend")
+	rootCmd.PersistentFlags().Set("tag", "feature")
+	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
+	exportJSONCmd.Flags().Set("from", fromDate)
+	defer resetFilterFlags(exportJSONCmd)
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+	defer exportJSONCmd.Flags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nStderr: %s", err, stderr.String())
+	}
+
+	// Should only include "Recent matching entry" (within date range, matching project and tag)
+	if len(result.Entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(result.Entries))
+		for i, e := range result.Entries {
+			t.Logf("Entry %d: %s", i, e.Description)
+		}
+	}
+
+	if len(result.Entries) > 0 && result.Entries[0].Description != "Recent matching entry" {
+		t.Errorf("Expected 'Recent matching entry', got %q", result.Entries[0].Description)
+	}
+
+	// Verify complete JSON output structure
+	if result.Metadata.TotalEntries != 1 {
+		t.Errorf("Expected total_entries=1, got %d", result.Metadata.TotalEntries)
+	}
+
+	// Check all filter criteria are present
+	if result.Metadata.FilterCriteria["project"] != "frontend" {
+		t.Errorf("Expected project='frontend' in filter_criteria")
+	}
+
+	if result.Metadata.FilterCriteria["tags"] == nil {
+		t.Error("Expected 'tags' in filter_criteria")
+	}
+
+	if result.Metadata.FilterCriteria["from"] == nil {
+		t.Error("Expected 'from' in filter_criteria")
+	}
+
+	// Verify entries have complete fields
+	if len(result.Entries) > 0 {
+		e := result.Entries[0]
+		if e.Description == "" {
+			t.Error("Expected entry to have description")
+		}
+		if e.DurationMinutes == 0 {
+			t.Error("Expected entry to have duration")
+		}
+		if e.RawInput == "" {
+			t.Error("Expected entry to have raw_input")
+		}
+		if e.Project == "" {
+			t.Error("Expected entry to have project")
+		}
+		if len(e.Tags) == 0 {
+			t.Error("Expected entry to have tags")
+		}
+	}
+}
+
+func TestExportJSON_Integration_ComplexFilteringWithMultipleMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, 0, -8),
+			Description:     "Backend API feature 1",
+			DurationMinutes: 120,
+			RawInput:        "Backend API feature 1 for 2h",
+			Project:         "backend",
+			Tags:            []string{"api", "feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -6),
+			Description:     "Backend API feature 2",
+			DurationMinutes: 90,
+			RawInput:        "Backend API feature 2 for 1h30m",
+			Project:         "backend",
+			Tags:            []string{"api", "feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -4),
+			Description:     "Backend API feature 3",
+			DurationMinutes: 60,
+			RawInput:        "Backend API feature 3 for 1h",
+			Project:         "backend",
+			Tags:            []string{"api", "feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "Frontend API feature",
+			DurationMinutes: 45,
+			RawInput:        "Frontend API feature for 45m",
+			Project:         "frontend",
+			Tags:            []string{"api", "feature"},
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2),
+			Description:     "Backend API bugfix",
+			DurationMinutes: 30,
+			RawInput:        "Backend API bugfix for 30m",
+			Project:         "backend",
+			Tags:            []string{"api", "bugfix"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(exportJSONCmd)
+	exportJSONCmd.Flags().Set("from", "")
+	exportJSONCmd.Flags().Set("to", "")
+	exportJSONCmd.Flags().Set("last", "0")
+
+	// Filter: project=backend, tags=[api,feature], last 7 days
+	rootCmd.PersistentFlags().Set("project", "backend")
+	rootCmd.PersistentFlags().Set("tag", "api")
+	rootCmd.PersistentFlags().Set("tag", "feature")
+	exportJSONCmd.Flags().Set("last", "7")
+	defer resetFilterFlags(exportJSONCmd)
+	defer exportJSONCmd.Flags().Set("from", "")
+	defer exportJSONCmd.Flags().Set("to", "")
+	defer exportJSONCmd.Flags().Set("last", "0")
+
+	exportJSON(exportJSONCmd)
+
+	var result ExportOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nStderr: %s", err, stderr.String())
+	}
+
+	// Should include 2 backend entries with both api and feature tags from last 7 days
+	if len(result.Entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(result.Entries))
+		for i, e := range result.Entries {
+			t.Logf("Entry %d: %s (project=%s, tags=%v)", i, e.Description, e.Project, e.Tags)
+		}
+	}
+
+	if result.Metadata.TotalEntries != 2 {
+		t.Errorf("Expected total_entries=2, got %d", result.Metadata.TotalEntries)
+	}
+
+	// Verify entries are correctly ordered (most recent first)
+	if len(result.Entries) == 2 {
+		if result.Entries[0].Description != "Backend API feature 2" {
+			t.Errorf("Expected first entry to be 'Backend API feature 2', got %q", result.Entries[0].Description)
+		}
+		if result.Entries[1].Description != "Backend API feature 3" {
+			t.Errorf("Expected second entry to be 'Backend API feature 3', got %q", result.Entries[1].Description)
+	}
+	}
+
+	// Verify complete metadata
+	if result.Metadata.FilterCriteria["project"] != "backend" {
+		t.Error("Expected 'project' in filter_criteria")
+	}
+
+	tagsInterface := result.Metadata.FilterCriteria["tags"]
+	if tagsSlice, ok := tagsInterface.([]interface{}); !ok || len(tagsSlice) != 2 {
+		t.Errorf("Expected 2 tags in filter_criteria, got %v", tagsInterface)
+	}
+
+	if lastDays, ok := result.Metadata.FilterCriteria["last_days"].(float64); !ok || lastDays != 7 {
+		t.Errorf("Expected last_days=7 in filter_criteria, got %v", result.Metadata.FilterCriteria["last_days"])
+	}
+
+	// Verify all entries have complete data
+	for i, e := range result.Entries {
+		if e.Timestamp.IsZero() {
+			t.Errorf("Entry %d has zero timestamp", i)
+		}
+		if e.Description == "" {
+			t.Errorf("Entry %d has empty description", i)
+		}
+		if e.DurationMinutes == 0 {
+			t.Errorf("Entry %d has zero duration", i)
+		}
+		if e.RawInput == "" {
+			t.Errorf("Entry %d has empty raw_input", i)
+		}
+		if e.Project != "backend" {
+			t.Errorf("Entry %d has wrong project: %s", i, e.Project)
+		}
+		if len(e.Tags) < 2 {
+			t.Errorf("Entry %d has insufficient tags: %v", i, e.Tags)
+		}
+	}
+}
