@@ -155,6 +155,16 @@ func createEntry(args []string) {
 		return
 	}
 
+	// Parse project and tags from description
+	cleanDesc, project, tags := entry.ParseProjectAndTags(description)
+
+	// Check that cleaned description is not empty (in case it was only @project/#tags)
+	if cleanDesc == "" {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Description cannot be empty (only project/tags provided)")
+		deps.Exit(1)
+		return
+	}
+
 	// Parse the duration
 	minutes, err := entry.ParseDuration(durationStr)
 	if err != nil {
@@ -168,9 +178,11 @@ func createEntry(args []string) {
 	// Create the entry
 	e := entry.Entry{
 		Timestamp:       time.Now(),
-		Description:     description,
+		Description:     cleanDesc,
 		DurationMinutes: minutes,
 		RawInput:        rawInput,
+		Project:         project,
+		Tags:            tags,
 	}
 
 	// Get storage path
