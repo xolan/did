@@ -252,6 +252,36 @@ func RestoreEntry(filepath string, index int) (entry.Entry, error) {
 	return restored, nil
 }
 
+// PurgeDeletedEntries permanently removes all soft-deleted entries from storage.
+// Returns the count of purged entries.
+// This operation cannot be undone.
+func PurgeDeletedEntries(filepath string) (int, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return 0, err
+	}
+
+	// Count deleted entries and filter to keep only active entries
+	deletedCount := 0
+	activeEntries := make([]entry.Entry, 0, len(entries))
+	for _, e := range entries {
+		if e.DeletedAt != nil {
+			deletedCount++
+		} else {
+			activeEntries = append(activeEntries, e)
+		}
+	}
+
+	// Only write back if there were deleted entries to purge
+	if deletedCount > 0 {
+		if err := WriteEntries(filepath, activeEntries); err != nil {
+			return 0, err
+		}
+	}
+
+	return deletedCount, nil
+}
+
 // DeleteEntry deletes the entry at the given index and returns it.
 // Index is 0-based. Returns an error if the index is out of bounds.
 // Rewrites the entire file without the deleted entry.
