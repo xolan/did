@@ -279,14 +279,15 @@ func runSingleProjectReport(cmd *cobra.Command, projectFilter string) {
 			resultHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
 		}
 	}
-	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", resultHeader)
-	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+	_, _ = fmt.Fprintln(deps.Stdout, resultHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	// Calculate width for right-aligned indices
 	maxIndexWidth := len(fmt.Sprintf("%d", len(filtered)))
 
 	for i, e := range filtered {
-		_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s %s  %s (%s)\n",
+		_, _ = fmt.Fprintf(deps.Stdout, "  [%*d] %s %s  %s  (%s)\n",
 			maxIndexWidth,
 			i+1, // 1-based index for user reference
 			e.Timestamp.Format("2006-01-02"),
@@ -294,7 +295,9 @@ func runSingleProjectReport(cmd *cobra.Command, projectFilter string) {
 			formatEntryForLog(e.Description, e.Project, e.Tags),
 			formatDuration(e.DurationMinutes))
 	}
-	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+
+	_, _ = fmt.Fprintln(deps.Stdout)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
 	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s (%d %s)\n", formatDuration(totalMinutes), len(filtered), pluralize("entry", len(filtered)))
 }
 
@@ -449,14 +452,15 @@ func runSingleTagReport(cmd *cobra.Command, tagFilters []string) {
 			resultHeader += fmt.Sprintf(" (%s)", formatDateRangeForDisplay(startDate, endDate))
 		}
 	}
-	_, _ = fmt.Fprintf(deps.Stdout, "%s:\n", resultHeader)
-	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+	_, _ = fmt.Fprintln(deps.Stdout, resultHeader)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	// Calculate width for right-aligned indices
 	maxIndexWidth := len(fmt.Sprintf("%d", len(filtered)))
 
 	for i, e := range filtered {
-		_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s %s  %s (%s)\n",
+		_, _ = fmt.Fprintf(deps.Stdout, "  [%*d] %s %s  %s  (%s)\n",
 			maxIndexWidth,
 			i+1, // 1-based index for user reference
 			e.Timestamp.Format("2006-01-02"),
@@ -464,7 +468,9 @@ func runSingleTagReport(cmd *cobra.Command, tagFilters []string) {
 			formatEntryForLog(e.Description, e.Project, e.Tags),
 			formatDuration(e.DurationMinutes))
 	}
-	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
+
+	_, _ = fmt.Fprintln(deps.Stdout)
+	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
 	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s (%d %s)\n", formatDuration(totalMinutes), len(filtered), pluralize("entry", len(filtered)))
 }
 
