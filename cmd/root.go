@@ -204,8 +204,8 @@ func createEntry(args []string) {
 		return
 	}
 
-	// Display success message
-	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", description, formatDuration(minutes))
+	// Display success message with optional project and tags
+	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", formatEntryForLog(cleanDesc, project, tags), formatDuration(minutes))
 }
 
 // listEntries reads and displays entries filtered by the given time range
@@ -343,6 +343,25 @@ func formatDuration(minutes int) string {
 		return fmt.Sprintf("%dh", hours)
 	}
 	return fmt.Sprintf("%dh %dm", hours, mins)
+}
+
+// formatEntryForLog formats a description with optional project and tags for display
+// Returns format like: "description" or "description [@project]" or "description [#tag1 #tag2]"
+// or "description [@project #tag1 #tag2]"
+func formatEntryForLog(description, project string, tags []string) string {
+	if project == "" && len(tags) == 0 {
+		return description
+	}
+
+	var parts []string
+	if project != "" {
+		parts = append(parts, "@"+project)
+	}
+	for _, tag := range tags {
+		parts = append(parts, "#"+tag)
+	}
+
+	return fmt.Sprintf("%s [%s]", description, strings.Join(parts, " "))
 }
 
 // editEntry modifies an existing time tracking entry
