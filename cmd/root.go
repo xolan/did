@@ -57,6 +57,14 @@ Search Examples:
   did search review --last 7                    Search in the last 7 days
   did search api --from 2024-01-01 --to 2024-01-31    Search within date range
 
+Export Commands:
+  did export json                               Export all entries as JSON
+  did export json > backup.json                 Export to file
+  did export json --from 2024-01-01             Export from a specific date
+  did export json --last 7                      Export last 7 days
+  did export json @acme #review                 Export with project and tag filters
+  did export json --last 30 --project acme      Export last 30 days for project
+
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
 
