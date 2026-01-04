@@ -19,6 +19,7 @@ cmd/
   undo.go                         # Undo last delete command
   purge.go                        # Purge all soft-deleted entries command
   restore.go                      # Restore from backup command
+  stats.go                        # Stats command (weekly/monthly statistics)
 internal/
   entry/
     entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput, DeletedAt)
@@ -29,8 +30,11 @@ internal/
     jsonl_test.go
     backup.go                     # Backup management (CreateBackup, ListBackups, RestoreBackup)
     backup_test.go
+  stats/
+    stats.go                      # Statistics calculations (CalculateStatistics, project/tag breakdowns, comparisons)
+    stats_test.go
   timeutil/
-    datefilter.go                 # Date range utilities (Today, Yesterday, ThisWeek, LastWeek)
+    datefilter.go                 # Date range utilities (Today, Yesterday, ThisWeek, LastWeek, ThisMonth, LastMonth)
     datefilter_test.go
 ```
 
@@ -70,6 +74,8 @@ did report --by project           # Show hours grouped by all projects
 did report --by tag               # Show hours grouped by all tags
 did report @project --last 7      # Project report for last 7 days
 did report --by project --from 2024-01-01 --to 2024-01-31  # Project breakdown for date range
+did stats                         # Show statistics for current week (total hours, average, comparison)
+did stats --month                 # Show statistics for current month
 ```
 
 Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.
