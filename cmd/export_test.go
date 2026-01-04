@@ -312,7 +312,9 @@ func TestExportJSON_CorruptedEntriesHandled(t *testing.T) {
 		t.Fatalf("Failed to open storage file: %v", err)
 	}
 	_, err = f.WriteString("this is not valid json\n")
-	f.Close()
+	if closeErr := f.Close(); closeErr != nil {
+		t.Fatalf("Failed to close storage file: %v", closeErr)
+	}
 	if err != nil {
 		t.Fatalf("Failed to write corrupted line: %v", err)
 	}
@@ -590,8 +592,14 @@ func TestExportJSON_FromFlag(t *testing.T) {
 
 	// Set --from flag to 5 days ago
 	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("from", fromDate)
-	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("from", fromDate); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -659,8 +667,14 @@ func TestExportJSON_ToFlag(t *testing.T) {
 
 	// Set --to flag to 5 days ago
 	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("to", toDate)
-	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("to", toDate); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -739,10 +753,20 @@ func TestExportJSON_FromAndToFlags(t *testing.T) {
 	// Set --from and --to flags for 10 days ago to 3 days ago
 	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
 	toDate := now.AddDate(0, 0, -3).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("from", fromDate)
-	exportJSONCmd.Flags().Set("to", toDate)
-	defer exportJSONCmd.Flags().Set("from", "") // Reset flags
-	defer exportJSONCmd.Flags().Set("to", "")
+	if err := exportJSONCmd.Flags().Set("from", fromDate); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", toDate); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -838,8 +862,14 @@ func TestExportJSON_LastFlag(t *testing.T) {
 	defer ResetDeps()
 
 	// Set --last flag to 7 days
-	exportJSONCmd.Flags().Set("last", "7")
-	defer exportJSONCmd.Flags().Set("last", "0") // Reset flag
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -878,8 +908,14 @@ func TestExportJSON_InvalidFromDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Set invalid --from date
-	exportJSONCmd.Flags().Set("from", "invalid-date")
-	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("from", "invalid-date"); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -912,8 +948,14 @@ func TestExportJSON_InvalidToDate(t *testing.T) {
 	defer ResetDeps()
 
 	// Set invalid --to date
-	exportJSONCmd.Flags().Set("to", "2024-13-45") // Invalid month/day
-	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("to", "2024-13-45"); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -946,10 +988,20 @@ func TestExportJSON_LastWithFromError(t *testing.T) {
 	defer ResetDeps()
 
 	// Set both --last and --from (should error)
-	exportJSONCmd.Flags().Set("last", "7")
-	exportJSONCmd.Flags().Set("from", "2024-01-01")
-	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
-	defer exportJSONCmd.Flags().Set("from", "")
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("from", "2024-01-01"); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -982,10 +1034,20 @@ func TestExportJSON_LastWithToError(t *testing.T) {
 	defer ResetDeps()
 
 	// Set both --last and --to (should error)
-	exportJSONCmd.Flags().Set("last", "7")
-	exportJSONCmd.Flags().Set("to", "2024-12-31")
-	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
-	defer exportJSONCmd.Flags().Set("to", "")
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", "2024-12-31"); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1018,12 +1080,26 @@ func TestExportJSON_LastWithBothFromAndToError(t *testing.T) {
 	defer ResetDeps()
 
 	// Set --last with both --from and --to (should error)
-	exportJSONCmd.Flags().Set("last", "7")
-	exportJSONCmd.Flags().Set("from", "2024-01-01")
-	exportJSONCmd.Flags().Set("to", "2024-12-31")
-	defer exportJSONCmd.Flags().Set("last", "0") // Reset flags
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("from", "2024-01-01"); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", "2024-12-31"); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1079,8 +1155,14 @@ func TestExportJSON_FromOnlyIncludesUpToNow(t *testing.T) {
 
 	// Set only --from flag (should include up to now)
 	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("from", fromDate)
-	defer exportJSONCmd.Flags().Set("from", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("from", fromDate); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1141,8 +1223,14 @@ func TestExportJSON_ToOnlyIncludesFromBeginning(t *testing.T) {
 
 	// Set only --to flag (should include from beginning)
 	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("to", toDate)
-	defer exportJSONCmd.Flags().Set("to", "") // Reset flag
+	if err := exportJSONCmd.Flags().Set("to", toDate); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1190,10 +1278,20 @@ func TestExportJSON_EuropeanDateFormat(t *testing.T) {
 	defer ResetDeps()
 
 	// Use European date format (DD/MM/YYYY)
-	exportJSONCmd.Flags().Set("from", "01/06/2024") // June 1, 2024
-	exportJSONCmd.Flags().Set("to", "30/06/2024")   // June 30, 2024
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
+	if err := exportJSONCmd.Flags().Set("from", "01/06/2024"); err != nil { // June 1, 2024
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", "30/06/2024"); err != nil { // June 30, 2024
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1227,8 +1325,14 @@ func TestExportJSON_PartialDateError(t *testing.T) {
 	defer ResetDeps()
 
 	// Set partial date (missing day)
-	exportJSONCmd.Flags().Set("from", "2024-01") // Year-Month only
-	defer exportJSONCmd.Flags().Set("from", "")
+	if err := exportJSONCmd.Flags().Set("from", "2024-01"); err != nil { // Year-Month only
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1266,7 +1370,9 @@ func TestExportJSON_ProjectFlag(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set --project flag
-	rootCmd.PersistentFlags().Set("project", "acme")
+	if err := rootCmd.PersistentFlags().Set("project", "acme"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1313,7 +1419,9 @@ func TestExportJSON_ProjectShorthand(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set project using -p shorthand
-	rootCmd.PersistentFlags().Set("project", "client")
+	if err := rootCmd.PersistentFlags().Set("project", "client"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1360,7 +1468,9 @@ func TestExportJSON_TagFlag(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set --tag flag
-	rootCmd.PersistentFlags().Set("tag", "review")
+	if err := rootCmd.PersistentFlags().Set("tag", "review"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1425,7 +1535,9 @@ func TestExportJSON_TagShorthand(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set tag using -t shorthand
-	rootCmd.PersistentFlags().Set("tag", "bugfix")
+	if err := rootCmd.PersistentFlags().Set("tag", "bugfix"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1524,8 +1636,12 @@ func TestExportJSON_MultipleTags(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set multiple --tag flags
-	rootCmd.PersistentFlags().Set("tag", "api")
-	rootCmd.PersistentFlags().Set("tag", "review")
+	if err := rootCmd.PersistentFlags().Set("tag", "api"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "review"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1614,8 +1730,12 @@ func TestExportJSON_ProjectAndTagCombined(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set both --project and --tag flags
-	rootCmd.PersistentFlags().Set("project", "acme")
-	rootCmd.PersistentFlags().Set("tag", "review")
+	if err := rootCmd.PersistentFlags().Set("project", "acme"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "review"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1710,13 +1830,23 @@ func TestExportJSON_ProjectWithDateFilter(t *testing.T) {
 
 	// Reset flags first to ensure clean state
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Set --project and --last flags
-	rootCmd.PersistentFlags().Set("project", "acme")
-	exportJSONCmd.Flags().Set("last", "7")
+	if err := rootCmd.PersistentFlags().Set("project", "acme"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
-	defer rootCmd.PersistentFlags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -1769,7 +1899,9 @@ func TestExportJSON_NoMatchingProject(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set --project flag for non-existent project
-	rootCmd.PersistentFlags().Set("project", "nonexistent")
+	if err := rootCmd.PersistentFlags().Set("project", "nonexistent"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1816,7 +1948,9 @@ func TestExportJSON_NoMatchingTag(t *testing.T) {
 	resetFilterFlags(exportJSONCmd)
 
 	// Set --tag flag for non-existent tag
-	rootCmd.PersistentFlags().Set("tag", "nonexistent")
+	if err := rootCmd.PersistentFlags().Set("tag", "nonexistent"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd) // Reset flags
 
 	exportJSON(exportJSONCmd)
@@ -1923,21 +2057,43 @@ func TestExportJSON_Integration_ProjectTagAndDateRange(t *testing.T) {
 
 	// Reset flags first
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("from", "")
-	exportJSONCmd.Flags().Set("to", "")
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+		t.Fatalf("Failed to reset from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+		t.Fatalf("Failed to reset to flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Set project='acme', tag='review', and date range (10 days ago to 3 days ago)
-	rootCmd.PersistentFlags().Set("project", "acme")
-	rootCmd.PersistentFlags().Set("tag", "review")
+	if err := rootCmd.PersistentFlags().Set("project", "acme"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "review"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
 	toDate := now.AddDate(0, 0, -3).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("from", fromDate)
-	exportJSONCmd.Flags().Set("to", toDate)
+	if err := exportJSONCmd.Flags().Set("from", fromDate); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", toDate); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd)
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
-	defer exportJSONCmd.Flags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -2053,18 +2209,38 @@ func TestExportJSON_Integration_MultipleTagsWithLast(t *testing.T) {
 	defer ResetDeps()
 
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("from", "")
-	exportJSONCmd.Flags().Set("to", "")
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+		t.Fatalf("Failed to reset from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+		t.Fatalf("Failed to reset to flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Set multiple tags and last 7 days
-	rootCmd.PersistentFlags().Set("tag", "api")
-	rootCmd.PersistentFlags().Set("tag", "urgent")
-	exportJSONCmd.Flags().Set("last", "7")
+	if err := rootCmd.PersistentFlags().Set("tag", "api"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "urgent"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd)
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
-	defer exportJSONCmd.Flags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -2142,18 +2318,38 @@ func TestExportJSON_Integration_AllFiltersWithNoMatches(t *testing.T) {
 	defer ResetDeps()
 
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("from", "")
-	exportJSONCmd.Flags().Set("to", "")
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+		t.Fatalf("Failed to reset from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+		t.Fatalf("Failed to reset to flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Set filters that won't match any entry (project=acme, tag=bugfix)
-	rootCmd.PersistentFlags().Set("project", "acme")
-	rootCmd.PersistentFlags().Set("tag", "bugfix")
-	exportJSONCmd.Flags().Set("last", "7")
+	if err := rootCmd.PersistentFlags().Set("project", "acme"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "bugfix"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd)
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
-	defer exportJSONCmd.Flags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -2251,19 +2447,39 @@ func TestExportJSON_Integration_ProjectTagAndFrom(t *testing.T) {
 	defer ResetDeps()
 
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("from", "")
-	exportJSONCmd.Flags().Set("to", "")
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+		t.Fatalf("Failed to reset from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+		t.Fatalf("Failed to reset to flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Filter: project=frontend, tag=feature, from=10 days ago
-	rootCmd.PersistentFlags().Set("project", "frontend")
-	rootCmd.PersistentFlags().Set("tag", "feature")
+	if err := rootCmd.PersistentFlags().Set("project", "frontend"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "feature"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
 	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
-	exportJSONCmd.Flags().Set("from", fromDate)
+	if err := exportJSONCmd.Flags().Set("from", fromDate); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd)
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
-	defer exportJSONCmd.Flags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
@@ -2392,19 +2608,41 @@ func TestExportJSON_Integration_ComplexFilteringWithMultipleMatches(t *testing.T
 	defer ResetDeps()
 
 	resetFilterFlags(exportJSONCmd)
-	exportJSONCmd.Flags().Set("from", "")
-	exportJSONCmd.Flags().Set("to", "")
-	exportJSONCmd.Flags().Set("last", "0")
+	if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+		t.Fatalf("Failed to reset from flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+		t.Fatalf("Failed to reset to flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+		t.Fatalf("Failed to reset last flag: %v", err)
+	}
 
 	// Filter: project=backend, tags=[api,feature], last 7 days
-	rootCmd.PersistentFlags().Set("project", "backend")
-	rootCmd.PersistentFlags().Set("tag", "api")
-	rootCmd.PersistentFlags().Set("tag", "feature")
-	exportJSONCmd.Flags().Set("last", "7")
+	if err := rootCmd.PersistentFlags().Set("project", "backend"); err != nil {
+		t.Fatalf("Failed to set project flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "api"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := rootCmd.PersistentFlags().Set("tag", "feature"); err != nil {
+		t.Fatalf("Failed to set tag flag: %v", err)
+	}
+	if err := exportJSONCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
 	defer resetFilterFlags(exportJSONCmd)
-	defer exportJSONCmd.Flags().Set("from", "")
-	defer exportJSONCmd.Flags().Set("to", "")
-	defer exportJSONCmd.Flags().Set("last", "0")
+	defer func() {
+		if err := exportJSONCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+		if err := exportJSONCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+	}()
 
 	exportJSON(exportJSONCmd)
 
