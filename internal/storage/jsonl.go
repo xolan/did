@@ -282,6 +282,44 @@ func PurgeDeletedEntries(filepath string) (int, error) {
 	return deletedCount, nil
 }
 
+// CleanupOldDeleted permanently removes entries that have been soft-deleted for more than 7 days.
+// Returns the count of cleaned up entries.
+// Does not affect recently deleted entries (deleted within the last 7 days).
+// This operation cannot be undone.
+func CleanupOldDeleted(filepath string) (int, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return 0, err
+	}
+
+	// Calculate cutoff time (7 days ago)
+	cutoffTime := time.Now().Add(-7 * 24 * time.Hour)
+
+	// Count old deleted entries and filter to keep entries that are:
+	// - Active (DeletedAt is nil), OR
+	// - Recently deleted (DeletedAt is after cutoff)
+	cleanedCount := 0
+	keptEntries := make([]entry.Entry, 0, len(entries))
+	for _, e := range entries {
+		if e.DeletedAt != nil && e.DeletedAt.Before(cutoffTime) {
+			// Entry was deleted more than 7 days ago - remove it
+			cleanedCount++
+		} else {
+			// Keep this entry (either active or recently deleted)
+			keptEntries = append(keptEntries, e)
+		}
+	}
+
+	// Only write back if there were old deleted entries to clean up
+	if cleanedCount > 0 {
+		if err := WriteEntries(filepath, keptEntries); err != nil {
+			return 0, err
+		}
+	}
+
+	return cleanedCount, nil
+}
+
 // DeleteEntry deletes the entry at the given index and returns it.
 // Index is 0-based. Returns an error if the index is out of bounds.
 // Rewrites the entire file without the deleted entry.
