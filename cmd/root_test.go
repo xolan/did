@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/storage"
+	"github.com/xolan/did/internal/timeutil"
 )
 
 // testDeps creates test dependencies with captured output
@@ -27,6 +28,20 @@ func testDeps(storagePath string) (*Deps, *bytes.Buffer, *bytes.Buffer) {
 			return storagePath, nil
 		},
 	}, stdout, stderr
+}
+
+// resetFilterFlags clears all persistent filter flags to avoid test contamination
+// Note: StringSlice flags are difficult to reset cleanly in pflag, so we just mark them as unchanged
+func resetFilterFlags(cmd *cobra.Command) {
+	// Reset project flag
+	_ = cmd.Root().PersistentFlags().Set("project", "")
+
+	// For StringSlice tag flag, mark as unchanged
+	// This prevents GetStringSlice from using accumulated values from previous tests
+	tagFlag := cmd.Root().PersistentFlags().Lookup("tag")
+	if tagFlag != nil {
+		tagFlag.Changed = false
+	}
 }
 
 func TestPluralize(t *testing.T) {
@@ -912,6 +927,489 @@ func TestLastWeek_Command(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "No entries found for last week") {
 		t.Errorf("Expected 'No entries found for last week', got: %s", stdout.String())
+	}
+}
+
+func TestYesterday_WithProjectFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for yesterday with different projects
+	yesterday := time.Now().AddDate(0, 0, -1)
+	entries := []entry.Entry{
+		{
+			Timestamp:       yesterday,
+			Description:     "work on acme",
+			DurationMinutes: 60,
+			RawInput:        "work on acme @acme for 1h",
+			Project:         "acme",
+			Tags:            []string{},
+		},
+		{
+			Timestamp:       yesterday,
+			Description:     "work on client",
+			DurationMinutes: 30,
+			RawInput:        "work on client @client for 30m",
+			Project:         "client",
+			Tags:            []string{},
+		},
+		{
+			Timestamp:       yesterday,
+			Description:     "no project work",
+			DurationMinutes: 45,
+			RawInput:        "no project work for 45m",
+			Project:         "",
+			Tags:            []string{},
+		},
+	}
+
+	// Write entries to storage
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(yCmd)
+
+	// Set project filter flag
+	_ = yCmd.Root().PersistentFlags().Set("project", "acme")
+
+	// Run yesterday command with filter
+	yCmd.Run(yCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show filtered results
+	if !strings.Contains(output, "work on acme") {
+		t.Errorf("Expected 'work on acme' in output, got: %s", output)
+	}
+
+	// Should NOT show other projects
+	if strings.Contains(output, "work on client") {
+		t.Errorf("Should not show 'work on client' (different project), got: %s", output)
+	}
+
+	if strings.Contains(output, "no project work") {
+		t.Errorf("Should not show 'no project work' (no project), got: %s", output)
+	}
+
+	// Should show filter in period description
+	if !strings.Contains(output, "yesterday (@acme)") {
+		t.Errorf("Expected 'yesterday (@acme)' in output, got: %s", output)
+	}
+
+	// Total should reflect only filtered entries (1h)
+	if !strings.Contains(output, "Total: 1h") {
+		t.Errorf("Expected 'Total: 1h' (filtered), got: %s", output)
+	}
+}
+
+func TestYesterday_WithShorthandProjectFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for yesterday
+	yesterday := time.Now().AddDate(0, 0, -1)
+	entries := []entry.Entry{
+		{
+			Timestamp:       yesterday,
+			Description:     "work on acme",
+			DurationMinutes: 60,
+			RawInput:        "work on acme @acme for 1h",
+			Project:         "acme",
+			Tags:            []string{},
+		},
+		{
+			Timestamp:       yesterday,
+			Description:     "work on other",
+			DurationMinutes: 30,
+			RawInput:        "work on other for 30m",
+			Project:         "",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(yCmd)
+
+	// Use shorthand @acme syntax
+	yCmd.Run(yCmd, []string{"@acme"})
+
+	output := stdout.String()
+
+	// Should show only acme project
+	if !strings.Contains(output, "work on acme") {
+		t.Errorf("Expected 'work on acme' in output, got: %s", output)
+	}
+
+	if strings.Contains(output, "work on other") {
+		t.Errorf("Should not show 'work on other', got: %s", output)
+	}
+
+	if !strings.Contains(output, "yesterday (@acme)") {
+		t.Errorf("Expected 'yesterday (@acme)' in output, got: %s", output)
+	}
+}
+
+func TestThisWeek_WithTagFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for this week with different tags
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "fix bug",
+			DurationMinutes: 120,
+			RawInput:        "fix bug #bugfix for 2h",
+			Project:         "",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "code review",
+			DurationMinutes: 30,
+			RawInput:        "code review #review for 30m",
+			Project:         "",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "meeting",
+			DurationMinutes: 60,
+			RawInput:        "meeting for 1h",
+			Project:         "",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(wCmd)
+
+	// Set tag filter flag
+	_ = wCmd.Root().PersistentFlags().Set("tag", "bugfix")
+
+	// Run this week command with filter
+	wCmd.Run(wCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show filtered results
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+
+	// Should NOT show other tags
+	if strings.Contains(output, "code review") {
+		t.Errorf("Should not show 'code review' (different tag), got: %s", output)
+	}
+
+	if strings.Contains(output, "meeting") {
+		t.Errorf("Should not show 'meeting' (no tag), got: %s", output)
+	}
+
+	// Should show filter in period description
+	if !strings.Contains(output, "this week (#bugfix)") {
+		t.Errorf("Expected 'this week (#bugfix)' in output, got: %s", output)
+	}
+
+	// Total should reflect only filtered entries (2h)
+	if !strings.Contains(output, "Total: 2h") {
+		t.Errorf("Expected 'Total: 2h' (filtered), got: %s", output)
+	}
+}
+
+func TestThisWeek_WithShorthandTagFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for this week
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "fix bug",
+			DurationMinutes: 120,
+			RawInput:        "fix bug #bugfix for 2h",
+			Project:         "",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       now,
+			Description:     "other work",
+			DurationMinutes: 30,
+			RawInput:        "other work for 30m",
+			Project:         "",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(wCmd)
+
+	// Use shorthand #bugfix syntax
+	wCmd.Run(wCmd, []string{"#bugfix"})
+
+	output := stdout.String()
+
+	// Should show only bugfix tag
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+
+	if strings.Contains(output, "other work") {
+		t.Errorf("Should not show 'other work', got: %s", output)
+	}
+
+	// Check that the filter is applied (period description should mention #bugfix)
+	if !strings.Contains(output, "#bugfix") || !strings.Contains(output, "this week") {
+		t.Errorf("Expected period description to mention 'this week' and '#bugfix', got: %s", output)
+	}
+}
+
+func TestLastWeek_WithProjectAndTagFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for last week
+	lastWeekStart, _ := timeutil.LastWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart.Add(24 * time.Hour),
+			Description:     "urgent client work",
+			DurationMinutes: 180,
+			RawInput:        "urgent client work @client #urgent for 3h",
+			Project:         "client",
+			Tags:            []string{"urgent"},
+		},
+		{
+			Timestamp:       lastWeekStart.Add(24 * time.Hour),
+			Description:     "client review",
+			DurationMinutes: 60,
+			RawInput:        "client review @client #review for 1h",
+			Project:         "client",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       lastWeekStart.Add(24 * time.Hour),
+			Description:     "other urgent work",
+			DurationMinutes: 90,
+			RawInput:        "other urgent work @other #urgent for 1h30m",
+			Project:         "other",
+			Tags:            []string{"urgent"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(lwCmd)
+
+	// Set both project and tag filters
+	_ = lwCmd.Root().PersistentFlags().Set("project", "client")
+	_ = lwCmd.Root().PersistentFlags().Set("tag", "urgent")
+
+	// Run last week command with filters
+	lwCmd.Run(lwCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show only entries matching BOTH filters
+	if !strings.Contains(output, "urgent client work") {
+		t.Errorf("Expected 'urgent client work' in output, got: %s", output)
+	}
+
+	// Should NOT show entries matching only one filter
+	if strings.Contains(output, "client review") {
+		t.Errorf("Should not show 'client review' (wrong tag), got: %s", output)
+	}
+
+	if strings.Contains(output, "other urgent work") {
+		t.Errorf("Should not show 'other urgent work' (wrong project), got: %s", output)
+	}
+
+	// Should show both filters in period description
+	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "last week") {
+		t.Errorf("Expected period description to mention 'last week', '@client', and '#urgent', got: %s", output)
+	}
+
+	// Total should reflect only filtered entries (3h)
+	if !strings.Contains(output, "Total: 3h") {
+		t.Errorf("Expected 'Total: 3h' (filtered), got: %s", output)
+	}
+}
+
+func TestLastWeek_WithShorthandProjectAndTagFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for last week
+	lastWeekStart, _ := timeutil.LastWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart.Add(24 * time.Hour),
+			Description:     "urgent client work",
+			DurationMinutes: 180,
+			RawInput:        "urgent client work @client #urgent for 3h",
+			Project:         "client",
+			Tags:            []string{"urgent"},
+		},
+		{
+			Timestamp:       lastWeekStart.Add(24 * time.Hour),
+			Description:     "other work",
+			DurationMinutes: 60,
+			RawInput:        "other work for 1h",
+			Project:         "",
+			Tags:            []string{},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(lwCmd)
+
+	// Use shorthand syntax for both project and tag
+	lwCmd.Run(lwCmd, []string{"@client", "#urgent"})
+
+	output := stdout.String()
+
+	// Should show only entries matching both filters
+	if !strings.Contains(output, "urgent client work") {
+		t.Errorf("Expected 'urgent client work' in output, got: %s", output)
+	}
+
+	if strings.Contains(output, "other work") {
+		t.Errorf("Should not show 'other work', got: %s", output)
+	}
+
+	// Check that filters are applied (period description should mention both filters)
+	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "last week") {
+		t.Errorf("Expected period description to mention 'last week', '@client', and '#urgent', got: %s", output)
+	}
+}
+
+func TestYesterday_WithMultipleTagFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for yesterday
+	yesterday := time.Now().AddDate(0, 0, -1)
+	entries := []entry.Entry{
+		{
+			Timestamp:       yesterday,
+			Description:     "urgent bugfix",
+			DurationMinutes: 120,
+			RawInput:        "urgent bugfix #bugfix #urgent for 2h",
+			Project:         "",
+			Tags:            []string{"bugfix", "urgent"},
+		},
+		{
+			Timestamp:       yesterday,
+			Description:     "regular bugfix",
+			DurationMinutes: 60,
+			RawInput:        "regular bugfix #bugfix for 1h",
+			Project:         "",
+			Tags:            []string{"bugfix"},
+		},
+		{
+			Timestamp:       yesterday,
+			Description:     "other urgent work",
+			DurationMinutes: 30,
+			RawInput:        "other urgent work #urgent for 30m",
+			Project:         "",
+			Tags:            []string{"urgent"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset persistent flags to avoid contamination from other tests
+	resetFilterFlags(yCmd)
+
+	// Use shorthand syntax for multiple tags
+	yCmd.Run(yCmd, []string{"#bugfix", "#urgent"})
+
+	output := stdout.String()
+
+	// Should show only entries with BOTH tags (AND logic)
+	if !strings.Contains(output, "urgent bugfix") {
+		t.Errorf("Expected 'urgent bugfix' in output, got: %s", output)
+	}
+
+	// Should NOT show entries with only one tag
+	if strings.Contains(output, "regular bugfix") {
+		t.Errorf("Should not show 'regular bugfix' (missing urgent tag), got: %s", output)
+	}
+
+	if strings.Contains(output, "other urgent work") {
+		t.Errorf("Should not show 'other urgent work' (missing bugfix tag), got: %s", output)
+	}
+
+	// Check that filters are applied (period description should mention both tags)
+	if !strings.Contains(output, "#bugfix") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "yesterday") {
+		t.Errorf("Expected period description to mention 'yesterday', '#bugfix', and '#urgent', got: %s", output)
 	}
 }
 
