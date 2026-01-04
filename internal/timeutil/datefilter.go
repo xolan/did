@@ -51,6 +51,30 @@ func LastWeek() (start, end time.Time) {
 	return StartOfWeek(lastWeek), EndOfWeek(lastWeek)
 }
 
+// StartOfMonth returns the first day of the month at 00:00:00 in the same timezone
+func StartOfMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+}
+
+// EndOfMonth returns the last nanosecond of the last day of the month (23:59:59.999999999)
+func EndOfMonth(t time.Time) time.Time {
+	// Get the first day of next month, then subtract one nanosecond
+	// This automatically handles different month lengths (28, 29, 30, 31 days)
+	return StartOfMonth(t).AddDate(0, 1, 0).Add(-time.Nanosecond)
+}
+
+// ThisMonth returns the start and end times for the current month
+func ThisMonth() (start, end time.Time) {
+	now := time.Now()
+	return StartOfMonth(now), EndOfMonth(now)
+}
+
+// LastMonth returns the start and end times for the previous month
+func LastMonth() (start, end time.Time) {
+	lastMonth := time.Now().AddDate(0, -1, 0)
+	return StartOfMonth(lastMonth), EndOfMonth(lastMonth)
+}
+
 // IsInRange checks if the given time t falls within the range [start, end] (inclusive)
 func IsInRange(t, start, end time.Time) bool {
 	return (t.Equal(start) || t.After(start)) && (t.Equal(end) || t.Before(end))
