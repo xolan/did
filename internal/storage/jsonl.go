@@ -195,6 +195,38 @@ func SoftDeleteEntry(filepath string, index int) (entry.Entry, error) {
 	return deleted, nil
 }
 
+// GetMostRecentlyDeleted finds the most recently soft-deleted entry.
+// Returns the entry, its index in the full entry list, and any error.
+// Returns an error if no soft-deleted entries exist.
+func GetMostRecentlyDeleted(filepath string) (entry.Entry, int, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return entry.Entry{}, -1, err
+	}
+
+	// Find the entry with the most recent DeletedAt timestamp
+	var mostRecent entry.Entry
+	mostRecentIndex := -1
+	var mostRecentTime *time.Time
+
+	for i, e := range entries {
+		if e.DeletedAt != nil {
+			// First deleted entry or more recent than current most recent
+			if mostRecentTime == nil || e.DeletedAt.After(*mostRecentTime) {
+				mostRecent = e
+				mostRecentIndex = i
+				mostRecentTime = e.DeletedAt
+			}
+		}
+	}
+
+	if mostRecentIndex == -1 {
+		return entry.Entry{}, -1, fmt.Errorf("no deleted entries found")
+	}
+
+	return mostRecent, mostRecentIndex, nil
+}
+
 // DeleteEntry deletes the entry at the given index and returns it.
 // Index is 0-based. Returns an error if the index is out of bounds.
 // Rewrites the entire file without the deleted entry.
