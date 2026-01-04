@@ -1052,3 +1052,863 @@ func TestUpdateEntry_ReadError(t *testing.T) {
 		t.Error("Expected error when updating from a directory path")
 	}
 }
+
+// ============================================================================
+// Soft Delete Tests
+// ============================================================================
+
+func TestSoftDeleteEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"entry one","duration_minutes":60,"raw_input":"entry one for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"entry two","duration_minutes":30,"raw_input":"entry two for 30m"}
+{"timestamp":"2024-01-15T11:00:00Z","description":"entry three","duration_minutes":45,"raw_input":"entry three for 45m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	// Soft delete middle entry (index 1)
+	deleted, err := SoftDeleteEntry(tmpFile, 1)
+	if err != nil {
+		t.Fatalf("SoftDeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "entry two" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "entry two")
+	}
+	if deleted.DeletedAt == nil {
+		t.Errorf("Deleted entry DeletedAt is nil, expected non-nil timestamp")
+	}
+
+	// Verify all entries still exist in file
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 3 {
+		t.Fatalf("Expected 3 entries after soft delete, got %d", len(entries))
+	}
+
+	// Verify the soft-deleted entry has DeletedAt set
+	if entries[1].DeletedAt == nil {
+		t.Errorf("Entry 1 DeletedAt is nil, expected non-nil")
+	}
+	if entries[1].Description != "entry two" {
+		t.Errorf("Entry 1 description = %q, expected %q", entries[1].Description, "entry two")
+	}
+
+	// Verify other entries are not deleted
+	if entries[0].DeletedAt != nil {
+		t.Errorf("Entry 0 DeletedAt should be nil, got %v", entries[0].DeletedAt)
+	}
+	if entries[2].DeletedAt != nil {
+		t.Errorf("Entry 2 DeletedAt should be nil, got %v", entries[2].DeletedAt)
+	}
+}
+
+func TestSoftDeleteEntry_FirstEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"first","duration_minutes":60,"raw_input":"first for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"second","duration_minutes":30,"raw_input":"second for 30m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	deleted, err := SoftDeleteEntry(tmpFile, 0)
+	if err != nil {
+		t.Fatalf("SoftDeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "first" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "first")
+	}
+	if deleted.DeletedAt == nil {
+		t.Errorf("Deleted entry DeletedAt is nil, expected non-nil")
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].DeletedAt == nil {
+		t.Errorf("Entry 0 DeletedAt should be set")
+	}
+	if entries[1].DeletedAt != nil {
+		t.Errorf("Entry 1 DeletedAt should be nil")
+	}
+}
+
+func TestSoftDeleteEntry_LastEntry(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"first","duration_minutes":60,"raw_input":"first for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"last","duration_minutes":30,"raw_input":"last for 30m"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	deleted, err := SoftDeleteEntry(tmpFile, 1)
+	if err != nil {
+		t.Fatalf("SoftDeleteEntry() returned unexpected error: %v", err)
+	}
+
+	if deleted.Description != "last" {
+		t.Errorf("Deleted entry description = %q, expected %q", deleted.Description, "last")
+	}
+
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].DeletedAt != nil {
+		t.Errorf("Entry 0 DeletedAt should be nil")
+	}
+	if entries[1].DeletedAt == nil {
+		t.Errorf("Entry 1 DeletedAt should be set")
+	}
+}
+
+func TestSoftDeleteEntry_InvalidIndex(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"only entry","duration_minutes":60,"raw_input":"only for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	tests := []struct {
+		name  string
+		index int
+	}{
+		{"negative index", -1},
+		{"index too large", 5},
+		{"index equals length", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := SoftDeleteEntry(tmpFile, tt.index)
+			if err == nil {
+				t.Errorf("SoftDeleteEntry(%d) should return error for invalid index", tt.index)
+			}
+		})
+	}
+}
+
+func TestReadActiveEntries_AllActive(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"entry one","duration_minutes":60,"raw_input":"entry one for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"entry two","duration_minutes":30,"raw_input":"entry two for 30m"}
+{"timestamp":"2024-01-15T11:00:00Z","description":"entry three","duration_minutes":45,"raw_input":"entry three for 45m"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	entries, err := ReadActiveEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadActiveEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 3 {
+		t.Errorf("Expected 3 active entries, got %d", len(entries))
+	}
+}
+
+func TestReadActiveEntries_MixedDeletedAndActive(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries and soft delete one
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active one",
+			DurationMinutes: 60,
+			RawInput:        "active one for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "to be deleted",
+			DurationMinutes: 30,
+			RawInput:        "to be deleted for 30m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 11, 0, 0, 0, time.UTC),
+			Description:     "active two",
+			DurationMinutes: 45,
+			RawInput:        "active two for 45m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete entry at index 1
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Read active entries
+	activeEntries, err := ReadActiveEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadActiveEntries() returned unexpected error: %v", err)
+	}
+
+	if len(activeEntries) != 2 {
+		t.Fatalf("Expected 2 active entries, got %d", len(activeEntries))
+	}
+
+	// Verify correct entries are returned
+	if activeEntries[0].Description != "active one" {
+		t.Errorf("Entry 0 description = %q, expected %q", activeEntries[0].Description, "active one")
+	}
+	if activeEntries[1].Description != "active two" {
+		t.Errorf("Entry 1 description = %q, expected %q", activeEntries[1].Description, "active two")
+	}
+}
+
+func TestReadActiveEntries_AllDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "entry one",
+			DurationMinutes: 60,
+			RawInput:        "entry one for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "entry two",
+			DurationMinutes: 30,
+			RawInput:        "entry two for 30m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete all entries
+	if _, err := SoftDeleteEntry(tmpFile, 0); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Read active entries
+	activeEntries, err := ReadActiveEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadActiveEntries() returned unexpected error: %v", err)
+	}
+
+	if len(activeEntries) != 0 {
+		t.Errorf("Expected 0 active entries, got %d", len(activeEntries))
+	}
+}
+
+func TestReadActiveEntries_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
+
+	entries, err := ReadActiveEntries(nonExistentFile)
+	if err != nil {
+		t.Errorf("ReadActiveEntries() returned unexpected error for non-existent file: %v", err)
+	}
+	if entries == nil {
+		t.Errorf("ReadActiveEntries() returned nil, expected empty slice")
+	}
+	if len(entries) != 0 {
+		t.Errorf("ReadActiveEntries() returned %d entries, expected 0", len(entries))
+	}
+}
+
+func TestGetMostRecentlyDeleted_SingleDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active entry",
+			DurationMinutes: 60,
+			RawInput:        "active for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "deleted entry",
+			DurationMinutes: 30,
+			RawInput:        "deleted for 30m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete one entry
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Get most recently deleted
+	deletedEntry, index, err := GetMostRecentlyDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("GetMostRecentlyDeleted() returned unexpected error: %v", err)
+	}
+
+	if deletedEntry.Description != "deleted entry" {
+		t.Errorf("Deleted entry description = %q, expected %q", deletedEntry.Description, "deleted entry")
+	}
+	if index != 1 {
+		t.Errorf("Deleted entry index = %d, expected 1", index)
+	}
+	if deletedEntry.DeletedAt == nil {
+		t.Errorf("Deleted entry DeletedAt is nil, expected non-nil")
+	}
+}
+
+func TestGetMostRecentlyDeleted_MultipleDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "first deleted",
+			DurationMinutes: 60,
+			RawInput:        "first for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "second deleted",
+			DurationMinutes: 30,
+			RawInput:        "second for 30m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 11, 0, 0, 0, time.UTC),
+			Description:     "active entry",
+			DurationMinutes: 45,
+			RawInput:        "active for 45m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete first entry
+	if _, err := SoftDeleteEntry(tmpFile, 0); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Wait a bit to ensure different timestamps
+	time.Sleep(10 * time.Millisecond)
+
+	// Soft delete second entry (should be most recent)
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Get most recently deleted
+	deletedEntry, index, err := GetMostRecentlyDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("GetMostRecentlyDeleted() returned unexpected error: %v", err)
+	}
+
+	if deletedEntry.Description != "second deleted" {
+		t.Errorf("Most recently deleted entry description = %q, expected %q", deletedEntry.Description, "second deleted")
+	}
+	if index != 1 {
+		t.Errorf("Most recently deleted entry index = %d, expected 1", index)
+	}
+}
+
+func TestGetMostRecentlyDeleted_NoDeletedEntries(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"active entry","duration_minutes":60,"raw_input":"active for 1h"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	_, _, err := GetMostRecentlyDeleted(tmpFile)
+	if err == nil {
+		t.Error("GetMostRecentlyDeleted() should return error when no deleted entries exist")
+	}
+
+	expectedError := "no deleted entries found"
+	if err.Error() != expectedError {
+		t.Errorf("Error message = %q, expected %q", err.Error(), expectedError)
+	}
+}
+
+func TestGetMostRecentlyDeleted_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
+
+	_, _, err := GetMostRecentlyDeleted(nonExistentFile)
+	if err == nil {
+		t.Error("GetMostRecentlyDeleted() should return error for empty file")
+	}
+}
+
+func TestRestoreEntry(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create and soft delete an entry
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active entry",
+			DurationMinutes: 60,
+			RawInput:        "active for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "deleted entry",
+			DurationMinutes: 30,
+			RawInput:        "deleted for 30m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete entry at index 1
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Restore the entry
+	restored, err := RestoreEntry(tmpFile, 1)
+	if err != nil {
+		t.Fatalf("RestoreEntry() returned unexpected error: %v", err)
+	}
+
+	if restored.Description != "deleted entry" {
+		t.Errorf("Restored entry description = %q, expected %q", restored.Description, "deleted entry")
+	}
+	if restored.DeletedAt != nil {
+		t.Errorf("Restored entry DeletedAt should be nil, got %v", restored.DeletedAt)
+	}
+
+	// Verify entry is restored in file
+	allEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if allEntries[1].DeletedAt != nil {
+		t.Errorf("Entry 1 DeletedAt should be nil after restore, got %v", allEntries[1].DeletedAt)
+	}
+
+	// Verify it appears in active entries
+	activeEntries, err := ReadActiveEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadActiveEntries() returned unexpected error: %v", err)
+	}
+
+	if len(activeEntries) != 2 {
+		t.Errorf("Expected 2 active entries after restore, got %d", len(activeEntries))
+	}
+}
+
+func TestRestoreEntry_InvalidIndex(t *testing.T) {
+	initialContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"only entry","duration_minutes":60,"raw_input":"only for 1h"}
+`
+	tmpFile := createTempFile(t, initialContent)
+
+	tests := []struct {
+		name  string
+		index int
+	}{
+		{"negative index", -1},
+		{"index too large", 5},
+		{"index equals length", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := RestoreEntry(tmpFile, tt.index)
+			if err == nil {
+				t.Errorf("RestoreEntry(%d) should return error for invalid index", tt.index)
+			}
+		})
+	}
+}
+
+func TestRestoreEntry_ActiveEntry(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"active entry","duration_minutes":60,"raw_input":"active for 1h"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	// Restore an entry that was never deleted (should work, just set DeletedAt to nil)
+	restored, err := RestoreEntry(tmpFile, 0)
+	if err != nil {
+		t.Fatalf("RestoreEntry() returned unexpected error: %v", err)
+	}
+
+	if restored.DeletedAt != nil {
+		t.Errorf("Restored entry DeletedAt should be nil, got %v", restored.DeletedAt)
+	}
+}
+
+func TestPurgeDeletedEntries_NoDeleted(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"active one","duration_minutes":60,"raw_input":"active one for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"active two","duration_minutes":30,"raw_input":"active two for 30m"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	count, err := PurgeDeletedEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("PurgeDeletedEntries() returned unexpected error: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Purged count = %d, expected 0", count)
+	}
+
+	// Verify entries are unchanged
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries after purge with no deleted, got %d", len(entries))
+	}
+}
+
+func TestPurgeDeletedEntries_SomeDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active one",
+			DurationMinutes: 60,
+			RawInput:        "active one for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "to delete one",
+			DurationMinutes: 30,
+			RawInput:        "to delete one for 30m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 11, 0, 0, 0, time.UTC),
+			Description:     "active two",
+			DurationMinutes: 45,
+			RawInput:        "active two for 45m",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 12, 0, 0, 0, time.UTC),
+			Description:     "to delete two",
+			DurationMinutes: 20,
+			RawInput:        "to delete two for 20m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete entries at indices 1 and 3
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+	if _, err := SoftDeleteEntry(tmpFile, 3); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Purge deleted entries
+	count, err := PurgeDeletedEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("PurgeDeletedEntries() returned unexpected error: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("Purged count = %d, expected 2", count)
+	}
+
+	// Verify only active entries remain
+	remainingEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(remainingEntries) != 2 {
+		t.Fatalf("Expected 2 entries after purge, got %d", len(remainingEntries))
+	}
+
+	if remainingEntries[0].Description != "active one" {
+		t.Errorf("Entry 0 description = %q, expected %q", remainingEntries[0].Description, "active one")
+	}
+	if remainingEntries[1].Description != "active two" {
+		t.Errorf("Entry 1 description = %q, expected %q", remainingEntries[1].Description, "active two")
+	}
+}
+
+func TestPurgeDeletedEntries_AllDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "entry one",
+			DurationMinutes: 60,
+			RawInput:        "entry one for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "entry two",
+			DurationMinutes: 30,
+			RawInput:        "entry two for 30m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete all entries
+	if _, err := SoftDeleteEntry(tmpFile, 0); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Purge all deleted entries
+	count, err := PurgeDeletedEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("PurgeDeletedEntries() returned unexpected error: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("Purged count = %d, expected 2", count)
+	}
+
+	// Verify no entries remain
+	remainingEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(remainingEntries) != 0 {
+		t.Errorf("Expected 0 entries after purging all, got %d", len(remainingEntries))
+	}
+}
+
+func TestPurgeDeletedEntries_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
+
+	count, err := PurgeDeletedEntries(nonExistentFile)
+	if err != nil {
+		t.Errorf("PurgeDeletedEntries() returned unexpected error for non-existent file: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Purged count = %d, expected 0", count)
+	}
+}
+
+func TestCleanupOldDeleted_NoOldDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries with recent deletion
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active entry",
+			DurationMinutes: 60,
+			RawInput:        "active for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "recently deleted",
+			DurationMinutes: 30,
+			RawInput:        "recently deleted for 30m",
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Soft delete one entry (will have recent timestamp)
+	if _, err := SoftDeleteEntry(tmpFile, 1); err != nil {
+		t.Fatalf("SoftDeleteEntry() failed: %v", err)
+	}
+
+	// Cleanup old deleted entries
+	count, err := CleanupOldDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("CleanupOldDeleted() returned unexpected error: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Cleaned up count = %d, expected 0", count)
+	}
+
+	// Verify all entries still present
+	allEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(allEntries) != 2 {
+		t.Errorf("Expected 2 entries after cleanup (no old deleted), got %d", len(allEntries))
+	}
+}
+
+func TestCleanupOldDeleted_WithOldDeleted(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entries with old DeletedAt timestamps
+	oldTime := time.Now().Add(-10 * 24 * time.Hour) // 10 days ago
+	recentTime := time.Now().Add(-3 * 24 * time.Hour) // 3 days ago
+
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "active entry",
+			DurationMinutes: 60,
+			RawInput:        "active for 1h",
+			DeletedAt:       nil,
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 10, 0, 0, 0, time.UTC),
+			Description:     "old deleted",
+			DurationMinutes: 30,
+			RawInput:        "old deleted for 30m",
+			DeletedAt:       &oldTime,
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 11, 0, 0, 0, time.UTC),
+			Description:     "recently deleted",
+			DurationMinutes: 45,
+			RawInput:        "recently deleted for 45m",
+			DeletedAt:       &recentTime,
+		},
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 12, 0, 0, 0, time.UTC),
+			Description:     "very old deleted",
+			DurationMinutes: 20,
+			RawInput:        "very old deleted for 20m",
+			DeletedAt:       &oldTime,
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Cleanup old deleted entries
+	count, err := CleanupOldDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("CleanupOldDeleted() returned unexpected error: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("Cleaned up count = %d, expected 2", count)
+	}
+
+	// Verify correct entries remain
+	remainingEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(remainingEntries) != 2 {
+		t.Fatalf("Expected 2 entries after cleanup, got %d", len(remainingEntries))
+	}
+
+	// Should have active entry and recently deleted entry
+	if remainingEntries[0].Description != "active entry" {
+		t.Errorf("Entry 0 description = %q, expected %q", remainingEntries[0].Description, "active entry")
+	}
+	if remainingEntries[1].Description != "recently deleted" {
+		t.Errorf("Entry 1 description = %q, expected %q", remainingEntries[1].Description, "recently deleted")
+	}
+}
+
+func TestCleanupOldDeleted_ExactlySevenDays(t *testing.T) {
+	tmpFile := createTempFile(t, "")
+
+	// Create entry deleted exactly 7 days ago
+	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, time.January, 15, 9, 0, 0, 0, time.UTC),
+			Description:     "deleted seven days ago",
+			DurationMinutes: 60,
+			RawInput:        "deleted for 1h",
+			DeletedAt:       &sevenDaysAgo,
+		},
+	}
+
+	if err := WriteEntries(tmpFile, entries); err != nil {
+		t.Fatalf("Failed to write test entries: %v", err)
+	}
+
+	// Cleanup old deleted entries
+	count, err := CleanupOldDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("CleanupOldDeleted() returned unexpected error: %v", err)
+	}
+
+	// Entry deleted exactly 7 days ago should be cleaned up (>= 7 days)
+	if count != 1 {
+		t.Errorf("Cleaned up count = %d, expected 1", count)
+	}
+
+	// Verify entry was removed
+	remainingEntries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(remainingEntries) != 0 {
+		t.Errorf("Expected 0 entries after cleanup, got %d", len(remainingEntries))
+	}
+}
+
+func TestCleanupOldDeleted_AllActive(t *testing.T) {
+	fileContent := `{"timestamp":"2024-01-15T09:00:00Z","description":"active one","duration_minutes":60,"raw_input":"active one for 1h"}
+{"timestamp":"2024-01-15T10:00:00Z","description":"active two","duration_minutes":30,"raw_input":"active two for 30m"}
+`
+	tmpFile := createTempFile(t, fileContent)
+
+	count, err := CleanupOldDeleted(tmpFile)
+	if err != nil {
+		t.Fatalf("CleanupOldDeleted() returned unexpected error: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Cleaned up count = %d, expected 0", count)
+	}
+
+	// Verify entries are unchanged
+	entries, err := ReadEntries(tmpFile)
+	if err != nil {
+		t.Fatalf("ReadEntries() returned unexpected error: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries after cleanup with no deleted, got %d", len(entries))
+	}
+}
+
+func TestCleanupOldDeleted_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentFile := filepath.Join(tmpDir, "does_not_exist.jsonl")
+
+	count, err := CleanupOldDeleted(nonExistentFile)
+	if err != nil {
+		t.Errorf("CleanupOldDeleted() returned unexpected error for non-existent file: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Cleaned up count = %d, expected 0", count)
+	}
+}
