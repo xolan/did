@@ -27,11 +27,26 @@ Usage:
   did delete <index>                            Delete an entry (with confirmation)
   did validate                                  Check storage file health
   did restore [n]                               Restore from backup (default: most recent)
+  did search <keyword>                          Search entries by keyword
 
 Date Query Commands:
   did 2024-01-15                                List entries for a specific date
   did from 2024-01-01 to 2024-01-31             List entries for a date range
   did last 7 days                               List entries from the past 7 days
+
+Filter Options:
+  --project <name>                              Filter entries by project
+  --tag <name>                                  Filter entries by tag (can be repeated)
+  @project                                      Shorthand for --project
+  #tag                                          Shorthand for --tag
+
+Filter Examples:
+  did --project acme                            List today's entries for project 'acme'
+  did @acme                                     Same as above (shorthand syntax)
+  did w --tag bugfix                            List this week's entries tagged 'bugfix'
+  did #bugfix                                   List today's entries tagged 'bugfix'
+  did y @client #urgent                         Yesterday's entries for project 'client' tagged 'urgent'
+  did --project acme --tag review --tag urgent  Multiple filters combined
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
@@ -153,6 +168,10 @@ func init() {
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(deleteCmd)
+
+	// Add persistent filter flags (apply to all commands)
+	rootCmd.PersistentFlags().String("project", "", "Filter entries by project")
+	rootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter entries by tag (can be repeated)")
 
 	// Add flags to edit command
 	editCmd.Flags().String("description", "", "New description for the entry")
