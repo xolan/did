@@ -64,6 +64,12 @@ Export Commands:
   did export json --last 7                      Export last 7 days
   did export json @acme #review                 Export with project and tag filters
   did export json --last 30 --project acme      Export last 30 days for project
+  did export csv                                Export all entries as CSV
+  did export csv > backup.csv                   Export to file
+  did export csv --from 2024-01-01              Export from a specific date
+  did export csv --last 7                       Export last 7 days
+  did export csv @acme #review                  Export with project and tag filters
+  did export csv --last 30 --project acme       Export last 30 days for project
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
