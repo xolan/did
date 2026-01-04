@@ -616,3 +616,205 @@ func TestTimezonePreservation(t *testing.T) {
 		t.Errorf("EndOfWeek changed timezone from %v to %v", originalLocation, result.Location())
 	}
 }
+
+func TestStartOfMonth(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Time
+		expected time.Time
+	}{
+		{
+			name:     "first day stays first day",
+			input:    makeTime(2024, time.January, 1, 0, 0, 0),
+			expected: makeTime(2024, time.January, 1, 0, 0, 0),
+		},
+		{
+			name:     "middle of month goes to first",
+			input:    makeTime(2024, time.January, 15, 14, 30, 0),
+			expected: makeTime(2024, time.January, 1, 0, 0, 0),
+		},
+		{
+			name:     "last day of month goes to first",
+			input:    makeTime(2024, time.January, 31, 23, 59, 59),
+			expected: makeTime(2024, time.January, 1, 0, 0, 0),
+		},
+		{
+			name:     "February in leap year",
+			input:    makeTime(2024, time.February, 15, 10, 0, 0),
+			expected: makeTime(2024, time.February, 1, 0, 0, 0),
+		},
+		{
+			name:     "February 29 in leap year",
+			input:    makeTime(2024, time.February, 29, 18, 45, 30),
+			expected: makeTime(2024, time.February, 1, 0, 0, 0),
+		},
+		{
+			name:     "30-day month (April)",
+			input:    makeTime(2024, time.April, 30, 12, 0, 0),
+			expected: makeTime(2024, time.April, 1, 0, 0, 0),
+		},
+		{
+			name:     "December",
+			input:    makeTime(2024, time.December, 25, 9, 30, 0),
+			expected: makeTime(2024, time.December, 1, 0, 0, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StartOfMonth(tt.input)
+			if !result.Equal(tt.expected) {
+				t.Errorf("StartOfMonth(%v) = %v, expected %v", tt.input, result, tt.expected)
+			}
+			// Verify it's the first day of the month
+			if result.Day() != 1 {
+				t.Errorf("StartOfMonth(%v) day = %d, expected 1", tt.input, result.Day())
+			}
+			// Verify it's midnight
+			if result.Hour() != 0 || result.Minute() != 0 || result.Second() != 0 || result.Nanosecond() != 0 {
+				t.Errorf("StartOfMonth(%v) time components not all zero: got %02d:%02d:%02d.%09d",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestEndOfMonth(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       time.Time
+		expectedDay int // expected last day of month
+	}{
+		{
+			name:        "January - 31 days",
+			input:       makeTime(2024, time.January, 15, 12, 0, 0),
+			expectedDay: 31,
+		},
+		{
+			name:        "February leap year - 29 days",
+			input:       makeTime(2024, time.February, 1, 0, 0, 0),
+			expectedDay: 29,
+		},
+		{
+			name:        "February non-leap year - 28 days",
+			input:       makeTime(2023, time.February, 15, 10, 0, 0),
+			expectedDay: 28,
+		},
+		{
+			name:        "March - 31 days",
+			input:       makeTime(2024, time.March, 20, 14, 30, 0),
+			expectedDay: 31,
+		},
+		{
+			name:        "April - 30 days",
+			input:       makeTime(2024, time.April, 15, 9, 0, 0),
+			expectedDay: 30,
+		},
+		{
+			name:        "May - 31 days",
+			input:       makeTime(2024, time.May, 31, 23, 59, 59),
+			expectedDay: 31,
+		},
+		{
+			name:        "June - 30 days",
+			input:       makeTime(2024, time.June, 1, 0, 0, 0),
+			expectedDay: 30,
+		},
+		{
+			name:        "December - 31 days",
+			input:       makeTime(2024, time.December, 25, 18, 0, 0),
+			expectedDay: 31,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := EndOfMonth(tt.input)
+
+			// Should be same month and year
+			if result.Year() != tt.input.Year() || result.Month() != tt.input.Month() {
+				t.Errorf("EndOfMonth(%v) changed month/year: got %v", tt.input, result)
+			}
+
+			// Should be the expected last day
+			if result.Day() != tt.expectedDay {
+				t.Errorf("EndOfMonth(%v) day = %d, expected %d", tt.input, result.Day(), tt.expectedDay)
+			}
+
+			// Should be 23:59:59.999999999
+			if result.Hour() != 23 || result.Minute() != 59 || result.Second() != 59 || result.Nanosecond() != 999999999 {
+				t.Errorf("EndOfMonth(%v) = %02d:%02d:%02d.%09d, expected 23:59:59.999999999",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestThisMonth(t *testing.T) {
+	start, end := ThisMonth()
+	now := time.Now()
+
+	// Start should be first day of current month at midnight
+	if start.Year() != now.Year() || start.Month() != now.Month() || start.Day() != 1 {
+		t.Errorf("ThisMonth() start date mismatch: got %v, expected first of %v %d", start, now.Month(), now.Year())
+	}
+	if start.Hour() != 0 || start.Minute() != 0 || start.Second() != 0 {
+		t.Errorf("ThisMonth() start not midnight: got %02d:%02d:%02d", start.Hour(), start.Minute(), start.Second())
+	}
+
+	// End should be last day of current month at end of day
+	if end.Year() != now.Year() || end.Month() != now.Month() {
+		t.Errorf("ThisMonth() end month/year mismatch: got %v, expected %v %d", end, now.Month(), now.Year())
+	}
+	if end.Hour() != 23 || end.Minute() != 59 || end.Second() != 59 {
+		t.Errorf("ThisMonth() end not end of day: got %02d:%02d:%02d", end.Hour(), end.Minute(), end.Second())
+	}
+
+	// Start should be before end
+	if !start.Before(end) {
+		t.Errorf("ThisMonth() start %v not before end %v", start, end)
+	}
+
+	// Verify start is first of month
+	if start.Day() != 1 {
+		t.Errorf("ThisMonth() start day = %d, expected 1", start.Day())
+	}
+}
+
+func TestLastMonth(t *testing.T) {
+	start, end := LastMonth()
+	now := time.Now()
+	expectedMonth := now.AddDate(0, -1, 0)
+
+	// Start should be first day of last month at midnight
+	if start.Year() != expectedMonth.Year() || start.Month() != expectedMonth.Month() || start.Day() != 1 {
+		t.Errorf("LastMonth() start date mismatch: got %v, expected first of %v %d", start, expectedMonth.Month(), expectedMonth.Year())
+	}
+	if start.Hour() != 0 || start.Minute() != 0 || start.Second() != 0 {
+		t.Errorf("LastMonth() start not midnight: got %02d:%02d:%02d", start.Hour(), start.Minute(), start.Second())
+	}
+
+	// End should be last day of last month at end of day
+	if end.Year() != expectedMonth.Year() || end.Month() != expectedMonth.Month() {
+		t.Errorf("LastMonth() end month/year mismatch: got %v, expected %v %d", end, expectedMonth.Month(), expectedMonth.Year())
+	}
+	if end.Hour() != 23 || end.Minute() != 59 || end.Second() != 59 {
+		t.Errorf("LastMonth() end not end of day: got %02d:%02d:%02d", end.Hour(), end.Minute(), end.Second())
+	}
+
+	// Start should be before end
+	if !start.Before(end) {
+		t.Errorf("LastMonth() start %v not before end %v", start, end)
+	}
+
+	// Verify start is first of month
+	if start.Day() != 1 {
+		t.Errorf("LastMonth() start day = %d, expected 1", start.Day())
+	}
+
+	// Last month end should be before this month start
+	thisMonthStart, _ := ThisMonth()
+	if !end.Before(thisMonthStart) {
+		t.Errorf("LastMonth() end %v not before ThisMonth() start %v", end, thisMonthStart)
+	}
+}
