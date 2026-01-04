@@ -22,6 +22,8 @@ Usage:
   did y                                         List yesterday's entries
   did w                                         List this week's entries
   did lw                                        List last week's entries
+  did 2024-01-15                                List entries for a specific date
+  did from 2024-01-01 to 2024-01-31             List entries for a date range
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
   did delete <index>                            Delete an entry (with confirmation)
@@ -30,6 +32,9 @@ Usage:
 
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
+
+Date formats: YYYY-MM-DD or DD/MM/YYYY
+Examples: 2024-01-15 or 15/01/2024
 
 Projects and Tags:
   Optionally categorize entries with @project and #tags in descriptions.
@@ -42,6 +47,24 @@ Projects and Tags:
 			// No args: list today's entries
 			listEntries("today", timeutil.Today)
 			return
+		}
+
+		// Check if this is a date query (single date argument) vs entry creation
+		// Entry creation requires 'for' keyword
+		rawInput := strings.Join(args, " ")
+		hasForKeyword := strings.Contains(strings.ToLower(rawInput), " for ")
+
+		// If no 'for' keyword and single argument that looks like a date, list entries for that date
+		if !hasForKeyword && len(args) == 1 {
+			if date, err := timeutil.ParseDate(args[0]); err == nil {
+				// Successfully parsed as a date - list entries for that day
+				endDate := timeutil.EndOfDay(date)
+				periodDesc := formatDateRangeForDisplay(date, endDate)
+				listEntries(periodDesc, func() (start, end time.Time) {
+					return date, endDate
+				})
+				return
+			}
 		}
 
 		// With args: create a new entry
