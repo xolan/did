@@ -15,15 +15,17 @@
 main.go                           # Entry point
 cmd/
   root.go                         # Cobra command definitions (did, y, w, lw, edit, validate)
-  delete.go                       # Delete command
+  delete.go                       # Delete command (soft delete)
+  undo.go                         # Undo last delete command
+  purge.go                        # Purge all soft-deleted entries command
   restore.go                      # Restore from backup command
 internal/
   entry/
-    entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput)
+    entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput, DeletedAt)
     parser.go                     # Duration parsing (ParseDuration)
     parser_test.go
   storage/
-    jsonl.go                      # JSONL storage (AppendEntry, ReadEntries, GetStoragePath)
+    jsonl.go                      # JSONL storage (AppendEntry, ReadEntries, GetStoragePath, soft delete functions)
     jsonl_test.go
     backup.go                     # Backup management (CreateBackup, ListBackups, RestoreBackup)
     backup_test.go
@@ -55,7 +57,10 @@ did w                             # List this week's entries
 did lw                            # List last week's entries
 did edit <index> --description X  # Edit entry description
 did edit <index> --duration 2h    # Edit entry duration
-did delete <index>                # Delete an entry (with confirmation)
+did delete <index>                # Soft delete an entry (can be undone, auto-purged after 7 days)
+did undo                          # Restore the most recently deleted entry
+did purge                         # Permanently remove all soft-deleted entries (with confirmation)
+did purge --yes                   # Permanently remove all soft-deleted entries (skip confirmation)
 did validate                      # Check storage file health
 did restore                       # Restore from most recent backup
 did restore <n>                   # Restore from backup #n (1-3)
@@ -66,6 +71,12 @@ Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hour
 ## Data Storage
 
 Entries stored in JSONL format at `~/.config/did/entries.jsonl` (Linux), uses `os.UserConfigDir()` for cross-platform support.
+
+**Soft Delete Behavior:**
+- Deleted entries are marked with a `deleted_at` timestamp rather than removed
+- Deleted entries can be recovered with `did undo`
+- Entries deleted more than 7 days ago are automatically purged during delete operations
+- Use `did purge` to manually remove all soft-deleted entries immediately
 
 ## Conventions
 
