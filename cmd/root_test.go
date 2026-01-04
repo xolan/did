@@ -1274,3 +1274,345 @@ func TestEditEntry_EmptyDescriptionWithOnlyProjectTags(t *testing.T) {
 		t.Errorf("Expected empty description error, got: %s", stderr.String())
 	}
 }
+
+// Integration tests for entry creation with project and tags
+
+func TestCreateEntry_WithProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"fix", "bug", "@acme", "for", "2h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@acme") {
+		t.Errorf("Expected '@acme' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct project
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected no tags, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 120 {
+		t.Errorf("Expected duration 120 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"fix", "bug", "#bugfix", "#urgent", "for", "1h30m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "fix bug") {
+		t.Errorf("Expected 'fix bug' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#bugfix") {
+		t.Errorf("Expected '#bugfix' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#urgent") {
+		t.Errorf("Expected '#urgent' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "fix bug" {
+		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "bugfix" || entries[0].Tags[1] != "urgent" {
+			t.Errorf("Expected tags ['bugfix', 'urgent'], got: %v", entries[0].Tags)
+		}
+	}
+	if entries[0].DurationMinutes != 90 {
+		t.Errorf("Expected duration 90 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithProjectAndTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"implement", "feature", "@clientco", "#feature", "#priority", "for", "3h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "implement feature") {
+		t.Errorf("Expected 'implement feature' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "@clientco") {
+		t.Errorf("Expected '@clientco' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#feature") {
+		t.Errorf("Expected '#feature' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#priority") {
+		t.Errorf("Expected '#priority' in output, got: %s", output)
+	}
+
+	// Verify entry was written with correct project and tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "implement feature" {
+		t.Errorf("Expected description 'implement feature', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "clientco" {
+		t.Errorf("Expected project 'clientco', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 2 {
+		t.Errorf("Expected 2 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "feature" || entries[0].Tags[1] != "priority" {
+			t.Errorf("Expected tags ['feature', 'priority'], got: %v", entries[0].Tags)
+		}
+	}
+	if entries[0].DurationMinutes != 180 {
+		t.Errorf("Expected duration 180 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_WithoutProjectOrTags_BackwardCompat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"simple", "task", "for", "45m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "simple task") {
+		t.Errorf("Expected 'simple task' in output, got: %s", output)
+	}
+	// Output should NOT contain project/tag brackets when neither is present
+	if strings.Contains(output, "[@") || strings.Contains(output, "[#") {
+		t.Errorf("Did not expect project/tag brackets in output, got: %s", output)
+	}
+
+	// Verify entry was written without project or tags
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Description != "simple task" {
+		t.Errorf("Expected description 'simple task', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "" {
+		t.Errorf("Expected empty project, got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 0 {
+		t.Errorf("Expected no tags, got: %v", entries[0].Tags)
+	}
+	if entries[0].DurationMinutes != 45 {
+		t.Errorf("Expected duration 45 minutes, got: %d", entries[0].DurationMinutes)
+	}
+}
+
+func TestCreateEntry_VerifyJSONLStorage(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, _, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"review", "code", "@acme", "#code-review", "for", "1h"})
+
+	// Read raw JSONL file to verify correct JSON encoding
+	content, err := os.ReadFile(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read storage file: %v", err)
+	}
+
+	jsonStr := string(content)
+	// Verify project field is present in JSON
+	if !strings.Contains(jsonStr, `"project":"acme"`) {
+		t.Errorf("Expected JSON to contain project field, got: %s", jsonStr)
+	}
+	// Verify tags field is present in JSON
+	if !strings.Contains(jsonStr, `"tags":["code-review"]`) {
+		t.Errorf("Expected JSON to contain tags field, got: %s", jsonStr)
+	}
+	// Verify description is clean (without @project and #tags)
+	if !strings.Contains(jsonStr, `"description":"review code"`) {
+		t.Errorf("Expected JSON to contain clean description, got: %s", jsonStr)
+	}
+}
+
+func TestCreateEntry_OnlyProjectTagsError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Create entry with only @project/#tags (no actual description)
+	createEntry([]string{"@acme", "#bugfix", "for", "1h"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for empty description")
+	}
+	if !strings.Contains(stderr.String(), "Description cannot be empty") {
+		t.Errorf("Expected empty description error, got: %s", stderr.String())
+	}
+}
+
+func TestCreateEntry_ProjectAndTagsInMiddle(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test with @project and #tags in the middle of description
+	createEntry([]string{"fix", "@acme", "bug", "#bugfix", "in", "login", "for", "2h"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Logged:") {
+		t.Errorf("Expected 'Logged:' in output, got: %s", output)
+	}
+
+	// Verify entry was written correctly
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	// Description should be cleaned of @project and #tags
+	if entries[0].Description != "fix bug in login" {
+		t.Errorf("Expected description 'fix bug in login', got: %s", entries[0].Description)
+	}
+	if entries[0].Project != "acme" {
+		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
+	}
+	if len(entries[0].Tags) != 1 || entries[0].Tags[0] != "bugfix" {
+		t.Errorf("Expected tags ['bugfix'], got: %v", entries[0].Tags)
+	}
+}
+
+func TestCreateEntry_MultipleTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, stderr := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	createEntry([]string{"deploy", "app", "#deploy", "#production", "#release-v1", "for", "30m"})
+
+	if stderr.Len() > 0 {
+		t.Errorf("Unexpected stderr output: %s", stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "#deploy") {
+		t.Errorf("Expected '#deploy' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#production") {
+		t.Errorf("Expected '#production' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "#release-v1") {
+		t.Errorf("Expected '#release-v1' in output, got: %s", output)
+	}
+
+	// Verify all tags were stored
+	entries, err := storage.ReadEntries(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to read entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+	if len(entries[0].Tags) != 3 {
+		t.Errorf("Expected 3 tags, got: %v", entries[0].Tags)
+	} else {
+		if entries[0].Tags[0] != "deploy" || entries[0].Tags[1] != "production" || entries[0].Tags[2] != "release-v1" {
+			t.Errorf("Expected tags ['deploy', 'production', 'release-v1'], got: %v", entries[0].Tags)
+		}
+	}
+}
