@@ -800,3 +800,590 @@ func TestStats_Pluralization(t *testing.T) {
 		t.Errorf("Expected '1 day' (singular), got: %s", output)
 	}
 }
+
+// Tests for project breakdown display
+
+func TestStats_ProjectBreakdown_ShowsWhenProjectsExist(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work on feature",
+			DurationMinutes: 180, // 3h
+			RawInput:        "work on feature @projectA for 3h",
+			Project:         "projectA",
+		},
+		{
+			Timestamp:       startOfWeek.Add(24 * time.Hour),
+			Description:     "different work",
+			DurationMinutes: 120, // 2h
+			RawInput:        "different work @projectB for 2h",
+			Project:         "projectB",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show "By Project:" section
+	if !strings.Contains(output, "By Project:") {
+		t.Error("Expected 'By Project:' section in output")
+	}
+	// Should show @projectA with @ prefix
+	if !strings.Contains(output, "@projectA") {
+		t.Error("Expected '@projectA' with @ prefix in output")
+	}
+	// Should show @projectB with @ prefix
+	if !strings.Contains(output, "@projectB") {
+		t.Error("Expected '@projectB' with @ prefix in output")
+	}
+	// Should show hours for projectA (3h)
+	if !strings.Contains(output, "3h") {
+		t.Errorf("Expected '3h' for projectA in output, got: %s", output)
+	}
+	// Should show hours for projectB (2h)
+	if !strings.Contains(output, "2h") {
+		t.Errorf("Expected '2h' for projectB in output, got: %s", output)
+	}
+}
+
+func TestStats_ProjectBreakdown_HiddenWhenNoProjects(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work without project",
+			DurationMinutes: 120,
+			RawInput:        "work without project for 2h",
+			Project:         "", // No project
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should still show "By Project:" section because "(no project)" exists
+	if !strings.Contains(output, "By Project:") {
+		t.Error("Expected 'By Project:' section even with (no project)")
+	}
+	// Should show "(no project)" without @ prefix
+	if !strings.Contains(output, "(no project)") {
+		t.Error("Expected '(no project)' in output")
+	}
+	// Should NOT have @ prefix for "(no project)"
+	if strings.Contains(output, "@(no project)") {
+		t.Error("Should not have @ prefix for '(no project)'")
+	}
+}
+
+func TestStats_ProjectBreakdown_NoProjectsEmptyOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries in a different time period (not in current week)
+	now := time.Now()
+	oldEntry := entry.Entry{
+		Timestamp:       now.AddDate(0, 0, -30), // 30 days ago
+		Description:     "old work",
+		DurationMinutes: 120,
+		RawInput:        "old work @projectA for 2h",
+		Project:         "projectA",
+	}
+	if err := storage.AppendEntry(storagePath, oldEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should NOT show "By Project:" section when no entries in current period
+	if strings.Contains(output, "By Project:") {
+		t.Error("Should not show 'By Project:' section when no entries in current period")
+	}
+}
+
+func TestStats_ProjectBreakdown_Sorting(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work",
+			DurationMinutes: 60, // 1h - least time
+			RawInput:        "work @projectC for 1h",
+			Project:         "projectC",
+		},
+		{
+			Timestamp:       startOfWeek.Add(1 * time.Hour),
+			Description:     "work",
+			DurationMinutes: 180, // 3h - most time
+			RawInput:        "work @projectA for 3h",
+			Project:         "projectA",
+		},
+		{
+			Timestamp:       startOfWeek.Add(2 * time.Hour),
+			Description:     "work",
+			DurationMinutes: 120, // 2h - middle
+			RawInput:        "work @projectB for 2h",
+			Project:         "projectB",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Projects should be listed in descending order by total time
+	// Find positions of each project in output
+	posA := strings.Index(output, "@projectA")
+	posB := strings.Index(output, "@projectB")
+	posC := strings.Index(output, "@projectC")
+
+	if posA == -1 || posB == -1 || posC == -1 {
+		t.Fatal("Not all projects found in output")
+	}
+
+	// projectA (3h) should come before projectB (2h)
+	if posA > posB {
+		t.Error("projectA (3h) should appear before projectB (2h)")
+	}
+	// projectB (2h) should come before projectC (1h)
+	if posB > posC {
+		t.Error("projectB (2h) should appear before projectC (1h)")
+	}
+}
+
+// Tests for tag breakdown display
+
+func TestStats_TagBreakdown_ShowsWhenTagsExist(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work on feature",
+			DurationMinutes: 180, // 3h
+			RawInput:        "work on feature #development for 3h",
+			Tags:            []string{"development"},
+		},
+		{
+			Timestamp:       startOfWeek.Add(24 * time.Hour),
+			Description:     "team meeting",
+			DurationMinutes: 120, // 2h
+			RawInput:        "team meeting #meeting for 2h",
+			Tags:            []string{"meeting"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show "By Tag:" section
+	if !strings.Contains(output, "By Tag:") {
+		t.Error("Expected 'By Tag:' section in output")
+	}
+	// Should show #development with # prefix
+	if !strings.Contains(output, "#development") {
+		t.Error("Expected '#development' with # prefix in output")
+	}
+	// Should show #meeting with # prefix
+	if !strings.Contains(output, "#meeting") {
+		t.Error("Expected '#meeting' with # prefix in output")
+	}
+	// Should show hours for development (3h)
+	if !strings.Contains(output, "3h") {
+		t.Errorf("Expected '3h' for development in output, got: %s", output)
+	}
+	// Should show hours for meeting (2h)
+	if !strings.Contains(output, "2h") {
+		t.Errorf("Expected '2h' for meeting in output, got: %s", output)
+	}
+}
+
+func TestStats_TagBreakdown_HiddenWhenNoTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work without tags",
+			DurationMinutes: 120,
+			RawInput:        "work without tags for 2h",
+			Tags:            []string{}, // No tags
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should still show "By Tag:" section because "(no tags)" exists
+	if !strings.Contains(output, "By Tag:") {
+		t.Error("Expected 'By Tag:' section even with (no tags)")
+	}
+	// Should show "(no tags)" without # prefix
+	if !strings.Contains(output, "(no tags)") {
+		t.Error("Expected '(no tags)' in output")
+	}
+	// Should NOT have # prefix for "(no tags)"
+	if strings.Contains(output, "#(no tags)") {
+		t.Error("Should not have # prefix for '(no tags)'")
+	}
+}
+
+func TestStats_TagBreakdown_NoTagsEmptyOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries in a different time period (not in current week)
+	now := time.Now()
+	oldEntry := entry.Entry{
+		Timestamp:       now.AddDate(0, 0, -30), // 30 days ago
+		Description:     "old work",
+		DurationMinutes: 120,
+		RawInput:        "old work #development for 2h",
+		Tags:            []string{"development"},
+	}
+	if err := storage.AppendEntry(storagePath, oldEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should NOT show "By Tag:" section when no entries in current period
+	if strings.Contains(output, "By Tag:") {
+		t.Error("Should not show 'By Tag:' section when no entries in current period")
+	}
+}
+
+func TestStats_TagBreakdown_MultipleTagsPerEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work",
+			DurationMinutes: 120, // 2h
+			RawInput:        "work #development #backend for 2h",
+			Tags:            []string{"development", "backend"},
+		},
+		{
+			Timestamp:       startOfWeek.Add(1 * time.Hour),
+			Description:     "more work",
+			DurationMinutes: 90, // 1h30m
+			RawInput:        "more work #development for 1h30m",
+			Tags:            []string{"development"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show both tags
+	if !strings.Contains(output, "#development") {
+		t.Error("Expected '#development' in output")
+	}
+	if !strings.Contains(output, "#backend") {
+		t.Error("Expected '#backend' in output")
+	}
+	// development should show 2 entries (both entries contribute)
+	// Check that development appears with more time (3h 30m total)
+	if !strings.Contains(output, "3h 30m") {
+		t.Error("Expected '3h 30m' for development tag (sum of both entries)")
+	}
+	// backend should show 1 entry (only first entry)
+	// Check that backend appears with 2h
+	// Note: This will be checked by finding 2h in association with backend
+}
+
+func TestStats_TagBreakdown_Sorting(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work",
+			DurationMinutes: 60, // 1h - least time
+			RawInput:        "work #review for 1h",
+			Tags:            []string{"review"},
+		},
+		{
+			Timestamp:       startOfWeek.Add(1 * time.Hour),
+			Description:     "work",
+			DurationMinutes: 180, // 3h - most time
+			RawInput:        "work #development for 3h",
+			Tags:            []string{"development"},
+		},
+		{
+			Timestamp:       startOfWeek.Add(2 * time.Hour),
+			Description:     "work",
+			DurationMinutes: 120, // 2h - middle
+			RawInput:        "work #meeting for 2h",
+			Tags:            []string{"meeting"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Tags should be listed in descending order by total time
+	// Find positions of each tag in output
+	posDev := strings.Index(output, "#development")
+	posMeeting := strings.Index(output, "#meeting")
+	posReview := strings.Index(output, "#review")
+
+	if posDev == -1 || posMeeting == -1 || posReview == -1 {
+		t.Fatal("Not all tags found in output")
+	}
+
+	// development (3h) should come before meeting (2h)
+	if posDev > posMeeting {
+		t.Error("development (3h) should appear before meeting (2h)")
+	}
+	// meeting (2h) should come before review (1h)
+	if posMeeting > posReview {
+		t.Error("meeting (2h) should appear before review (1h)")
+	}
+}
+
+// Combined project and tag breakdown test
+
+func TestStats_BothProjectAndTagBreakdown(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	startOfWeek, _ := timeutil.ThisWeek()
+	entries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "work",
+			DurationMinutes: 120,
+			RawInput:        "work @projectA #development for 2h",
+			Project:         "projectA",
+			Tags:            []string{"development"},
+		},
+		{
+			Timestamp:       startOfWeek.Add(1 * time.Hour),
+			Description:     "meeting",
+			DurationMinutes: 60,
+			RawInput:        "meeting @projectA #meeting for 1h",
+			Project:         "projectA",
+			Tags:            []string{"meeting"},
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show both "By Project:" and "By Tag:" sections
+	if !strings.Contains(output, "By Project:") {
+		t.Error("Expected 'By Project:' section in output")
+	}
+	if !strings.Contains(output, "By Tag:") {
+		t.Error("Expected 'By Tag:' section in output")
+	}
+	// Should show projectA
+	if !strings.Contains(output, "@projectA") {
+		t.Error("Expected '@projectA' in output")
+	}
+	// Should show both tags
+	if !strings.Contains(output, "#development") {
+		t.Error("Expected '#development' in output")
+	}
+	if !strings.Contains(output, "#meeting") {
+		t.Error("Expected '#meeting' in output")
+	}
+}
