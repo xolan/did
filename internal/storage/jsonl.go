@@ -227,6 +227,31 @@ func GetMostRecentlyDeleted(filepath string) (entry.Entry, int, error) {
 	return mostRecent, mostRecentIndex, nil
 }
 
+// RestoreEntry restores a soft-deleted entry by clearing its DeletedAt timestamp.
+// Index is 0-based. Returns an error if the index is out of bounds.
+// Returns the restored entry for confirmation.
+func RestoreEntry(filepath string, index int) (entry.Entry, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return entry.Entry{}, err
+	}
+
+	if index < 0 || index >= len(entries) {
+		return entry.Entry{}, fmt.Errorf("index %d out of bounds (0-%d)", index, len(entries)-1)
+	}
+
+	// Clear DeletedAt to restore the entry
+	entries[index].DeletedAt = nil
+
+	restored := entries[index]
+
+	if err := WriteEntries(filepath, entries); err != nil {
+		return entry.Entry{}, err
+	}
+
+	return restored, nil
+}
+
 // DeleteEntry deletes the entry at the given index and returns it.
 // Index is 0-based. Returns an error if the index is out of bounds.
 // Rewrites the entire file without the deleted entry.
