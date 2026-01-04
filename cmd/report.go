@@ -61,8 +61,12 @@ func init() {
 	// Add --by flag for grouping mode
 	reportCmd.Flags().String("by", "", "Group by 'project' or 'tag'")
 
+	// Date filtering flags
+	reportCmd.Flags().String("from", "", "Start date for filtering (YYYY-MM-DD or DD/MM/YYYY)")
+	reportCmd.Flags().String("to", "", "End date for filtering (YYYY-MM-DD or DD/MM/YYYY)")
+	reportCmd.Flags().Int("last", 0, "Filter by last N days (e.g., --last 7 for last 7 days)")
+
 	// Note: --project and --tag flags are inherited from root command's PersistentFlags
-	// Date filtering flags (--from, --to, --last) will be added in subtask 1.2
 }
 
 // runReport handles the report command logic
