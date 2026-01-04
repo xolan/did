@@ -125,6 +125,27 @@ func ReadEntries(filepath string) ([]entry.Entry, error) {
 	return result.Entries, err
 }
 
+// ReadActiveEntries reads all non-deleted entries from the JSON Lines storage file.
+// Returns only entries where DeletedAt is nil.
+// Returns an empty slice if the file doesn't exist (graceful handling).
+// Skips malformed lines for fault tolerance.
+func ReadActiveEntries(filepath string) ([]entry.Entry, error) {
+	entries, err := ReadEntries(filepath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter out deleted entries
+	active := make([]entry.Entry, 0, len(entries))
+	for _, e := range entries {
+		if e.DeletedAt == nil {
+			active = append(active, e)
+		}
+	}
+
+	return active, nil
+}
+
 // WriteEntries writes all entries to the JSON Lines storage file.
 // Overwrites the file if it exists. Creates the file with 0644 permissions.
 // This is used for operations that modify existing entries (e.g., delete, update).
