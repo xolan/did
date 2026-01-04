@@ -1387,3 +1387,459 @@ func TestStats_BothProjectAndTagBreakdown(t *testing.T) {
 		t.Error("Expected '#meeting' in output")
 	}
 }
+
+// Tests for comparison display
+
+func TestStats_Comparison_Increase(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last week
+	startOfWeek, _ := timeutil.ThisWeek()
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries for last week (2h)
+	lastWeekEntries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week work",
+			DurationMinutes: 120, // 2h
+			RawInput:        "Last week work for 2h",
+		},
+	}
+
+	// Add entries for this week (5h)
+	thisWeekEntries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week work",
+			DurationMinutes: 300, // 5h
+			RawInput:        "This week work for 5h",
+		},
+	}
+
+	allEntries := append(lastWeekEntries, thisWeekEntries...)
+	for _, e := range allEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison with "up" direction
+	if !strings.Contains(output, "Comparison:") {
+		t.Error("Expected 'Comparison:' label in output")
+	}
+	// Should show increase (5h - 2h = 3h)
+	if !strings.Contains(output, "up 3h from last week") {
+		t.Errorf("Expected 'up 3h from last week' in output, got: %s", output)
+	}
+}
+
+func TestStats_Comparison_Decrease(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last week
+	startOfWeek, _ := timeutil.ThisWeek()
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries for last week (5h)
+	lastWeekEntries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week work",
+			DurationMinutes: 300, // 5h
+			RawInput:        "Last week work for 5h",
+		},
+	}
+
+	// Add entries for this week (2h)
+	thisWeekEntries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week work",
+			DurationMinutes: 120, // 2h
+			RawInput:        "This week work for 2h",
+		},
+	}
+
+	allEntries := append(lastWeekEntries, thisWeekEntries...)
+	for _, e := range allEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison with "down" direction
+	if !strings.Contains(output, "Comparison:") {
+		t.Error("Expected 'Comparison:' label in output")
+	}
+	// Should show decrease (2h - 5h = -3h)
+	if !strings.Contains(output, "down 3h from last week") {
+		t.Errorf("Expected 'down 3h from last week' in output, got: %s", output)
+	}
+}
+
+func TestStats_Comparison_Same(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last week
+	startOfWeek, _ := timeutil.ThisWeek()
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries for last week (3h)
+	lastWeekEntries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week work",
+			DurationMinutes: 180, // 3h
+			RawInput:        "Last week work for 3h",
+		},
+	}
+
+	// Add entries for this week (3h)
+	thisWeekEntries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week work",
+			DurationMinutes: 180, // 3h
+			RawInput:        "This week work for 3h",
+		},
+	}
+
+	allEntries := append(lastWeekEntries, thisWeekEntries...)
+	for _, e := range allEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison with "same as"
+	if !strings.Contains(output, "Comparison:") {
+		t.Error("Expected 'Comparison:' label in output")
+	}
+	// Should show same (3h - 3h = 0)
+	if !strings.Contains(output, "same as last week") {
+		t.Errorf("Expected 'same as last week' in output, got: %s", output)
+	}
+}
+
+func TestStats_Comparison_NoPreviousData(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current week
+	startOfWeek, _ := timeutil.ThisWeek()
+
+	// Add entries only for this week (no previous week entries)
+	thisWeekEntries := []entry.Entry{
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week work",
+			DurationMinutes: 180, // 3h
+			RawInput:        "This week work for 3h",
+		},
+	}
+
+	for _, e := range thisWeekEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison (3h - 0h = 3h increase)
+	if !strings.Contains(output, "Comparison:") {
+		t.Error("Expected 'Comparison:' label in output")
+	}
+	if !strings.Contains(output, "up 3h from last week") {
+		t.Errorf("Expected 'up 3h from last week' (compared to zero), got: %s", output)
+	}
+}
+
+func TestStats_Comparison_NoCurrentData(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get last week
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries only for last week (no current week entries)
+	lastWeekEntries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week work",
+			DurationMinutes: 180, // 3h
+			RawInput:        "Last week work for 3h",
+		},
+	}
+
+	for _, e := range lastWeekEntries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison (0h - 3h = -3h decrease)
+	if !strings.Contains(output, "Comparison:") {
+		t.Error("Expected 'Comparison:' label in output")
+	}
+	if !strings.Contains(output, "down 3h from last week") {
+		t.Errorf("Expected 'down 3h from last week' (compared to last week), got: %s", output)
+	}
+}
+
+func TestStats_Comparison_WeekPeriod(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last week
+	startOfWeek, _ := timeutil.ThisWeek()
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries for both weeks
+	entries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week",
+			DurationMinutes: 120,
+			RawInput:        "Last week for 2h",
+		},
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week",
+			DurationMinutes: 180,
+			RawInput:        "This week for 3h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats (default week view)
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should mention "last week" in comparison
+	if !strings.Contains(output, "from last week") {
+		t.Errorf("Expected 'from last week' in comparison, got: %s", output)
+	}
+	// Should NOT mention "last month"
+	if strings.Contains(output, "from last month") {
+		t.Error("Should not mention 'last month' in week view")
+	}
+}
+
+func TestStats_Comparison_MonthPeriod(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last month
+	startOfMonth, _ := timeutil.ThisMonth()
+	lastMonthStart, _ := timeutil.LastMonth()
+
+	// Add entries for both months
+	entries := []entry.Entry{
+		{
+			Timestamp:       lastMonthStart,
+			Description:     "Last month",
+			DurationMinutes: 240,
+			RawInput:        "Last month for 4h",
+		},
+		{
+			Timestamp:       startOfMonth,
+			Description:     "This month",
+			DurationMinutes: 360,
+			RawInput:        "This month for 6h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats --month
+	_ = statsCmd.Flags().Set("month", "true")
+	defer func() { _ = statsCmd.Flags().Set("month", "false") }()
+
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should mention "last month" in comparison
+	if !strings.Contains(output, "from last month") {
+		t.Errorf("Expected 'from last month' in comparison, got: %s", output)
+	}
+	// Should NOT mention "last week"
+	if strings.Contains(output, "from last week") {
+		t.Error("Should not mention 'last week' in month view")
+	}
+}
+
+func TestStats_Comparison_DurationFormatting(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Get current and last week
+	startOfWeek, _ := timeutil.ThisWeek()
+	lastWeekStart, _ := timeutil.LastWeek()
+
+	// Add entries with a difference of 2h 30m (150 minutes)
+	entries := []entry.Entry{
+		{
+			Timestamp:       lastWeekStart,
+			Description:     "Last week",
+			DurationMinutes: 120, // 2h
+			RawInput:        "Last week for 2h",
+		},
+		{
+			Timestamp:       startOfWeek,
+			Description:     "This week",
+			DurationMinutes: 270, // 4h 30m
+			RawInput:        "This week for 4h30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Test: did stats
+	runStats(statsCmd, []string{})
+
+	output := stdout.String()
+	// Should show comparison with proper formatting (2h 30m)
+	if !strings.Contains(output, "up 2h 30m from last week") {
+		t.Errorf("Expected 'up 2h 30m from last week' in output, got: %s", output)
+	}
+}

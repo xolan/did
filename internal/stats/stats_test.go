@@ -1058,3 +1058,232 @@ func TestCalculateTagBreakdown_EntriesAtBoundaries(t *testing.T) {
 		t.Errorf("EntryCount = %d, expected 2", breakdown[0].EntryCount)
 	}
 }
+
+// Tests for CompareStatistics
+
+func TestCompareStatistics_PositiveDifference(t *testing.T) {
+	current := Statistics{
+		TotalMinutes:         300, // 5h
+		AverageMinutesPerDay: 42.86,
+		EntryCount:           5,
+		DaysWithEntries:      3,
+	}
+	previous := Statistics{
+		TotalMinutes:         180, // 3h
+		AverageMinutesPerDay: 25.71,
+		EntryCount:           3,
+		DaysWithEntries:      2,
+	}
+
+	diff := CompareStatistics(current, previous)
+
+	expectedDiff := 120 // 300 - 180
+	if diff != expectedDiff {
+		t.Errorf("CompareStatistics = %d, expected %d", diff, expectedDiff)
+	}
+}
+
+func TestCompareStatistics_NegativeDifference(t *testing.T) {
+	current := Statistics{
+		TotalMinutes:         120, // 2h
+		AverageMinutesPerDay: 17.14,
+		EntryCount:           2,
+		DaysWithEntries:      1,
+	}
+	previous := Statistics{
+		TotalMinutes:         300, // 5h
+		AverageMinutesPerDay: 42.86,
+		EntryCount:           5,
+		DaysWithEntries:      3,
+	}
+
+	diff := CompareStatistics(current, previous)
+
+	expectedDiff := -180 // 120 - 300
+	if diff != expectedDiff {
+		t.Errorf("CompareStatistics = %d, expected %d", diff, expectedDiff)
+	}
+}
+
+func TestCompareStatistics_ZeroDifference(t *testing.T) {
+	current := Statistics{
+		TotalMinutes:         240, // 4h
+		AverageMinutesPerDay: 34.29,
+		EntryCount:           4,
+		DaysWithEntries:      2,
+	}
+	previous := Statistics{
+		TotalMinutes:         240, // 4h
+		AverageMinutesPerDay: 34.29,
+		EntryCount:           4,
+		DaysWithEntries:      2,
+	}
+
+	diff := CompareStatistics(current, previous)
+
+	if diff != 0 {
+		t.Errorf("CompareStatistics = %d, expected 0", diff)
+	}
+}
+
+func TestCompareStatistics_NoPreviousData(t *testing.T) {
+	current := Statistics{
+		TotalMinutes:         180, // 3h
+		AverageMinutesPerDay: 25.71,
+		EntryCount:           3,
+		DaysWithEntries:      2,
+	}
+	previous := Statistics{
+		TotalMinutes:         0, // No data in previous period
+		AverageMinutesPerDay: 0,
+		EntryCount:           0,
+		DaysWithEntries:      0,
+	}
+
+	diff := CompareStatistics(current, previous)
+
+	expectedDiff := 180 // 180 - 0
+	if diff != expectedDiff {
+		t.Errorf("CompareStatistics = %d, expected %d", diff, expectedDiff)
+	}
+}
+
+func TestCompareStatistics_NoCurrentData(t *testing.T) {
+	current := Statistics{
+		TotalMinutes:         0, // No data in current period
+		AverageMinutesPerDay: 0,
+		EntryCount:           0,
+		DaysWithEntries:      0,
+	}
+	previous := Statistics{
+		TotalMinutes:         120, // 2h
+		AverageMinutesPerDay: 17.14,
+		EntryCount:           2,
+		DaysWithEntries:      1,
+	}
+
+	diff := CompareStatistics(current, previous)
+
+	expectedDiff := -120 // 0 - 120
+	if diff != expectedDiff {
+		t.Errorf("CompareStatistics = %d, expected %d", diff, expectedDiff)
+	}
+}
+
+// Tests for FormatComparison
+
+func TestFormatComparison_PositiveDifference_Week(t *testing.T) {
+	// 120 minutes = 2h increase
+	result := FormatComparison(120, "week")
+	expected := "up 2h from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_PositiveDifference_Month(t *testing.T) {
+	// 90 minutes = 1h 30m increase
+	result := FormatComparison(90, "month")
+	expected := "up 1h 30m from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_NegativeDifference_Week(t *testing.T) {
+	// -120 minutes = 2h decrease
+	result := FormatComparison(-120, "week")
+	expected := "down 2h from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_NegativeDifference_Month(t *testing.T) {
+	// -90 minutes = 1h 30m decrease
+	result := FormatComparison(-90, "month")
+	expected := "down 1h 30m from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_ZeroDifference_Week(t *testing.T) {
+	result := FormatComparison(0, "week")
+	expected := "same as last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_ZeroDifference_Month(t *testing.T) {
+	result := FormatComparison(0, "month")
+	expected := "same as last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_MinutesOnly(t *testing.T) {
+	// 45 minutes (less than 1 hour)
+	result := FormatComparison(45, "week")
+	expected := "up 45m from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+
+	// Negative minutes
+	result = FormatComparison(-30, "month")
+	expected = "down 30m from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_HoursOnly(t *testing.T) {
+	// 180 minutes = exactly 3h (no minutes remainder)
+	result := FormatComparison(180, "week")
+	expected := "up 3h from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+
+	// Negative hours only
+	result = FormatComparison(-240, "month")
+	expected = "down 4h from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_HoursAndMinutes(t *testing.T) {
+	// 135 minutes = 2h 15m
+	result := FormatComparison(135, "week")
+	expected := "up 2h 15m from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+
+	// Negative hours and minutes
+	result = FormatComparison(-195, "month")
+	expected = "down 3h 15m from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
+
+func TestFormatComparison_LargeDifference(t *testing.T) {
+	// 1500 minutes = 25h (more than a day)
+	result := FormatComparison(1500, "week")
+	expected := "up 25h from last week"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+
+	// 1545 minutes = 25h 45m
+	result = FormatComparison(-1545, "month")
+	expected = "down 25h 45m from last month"
+	if result != expected {
+		t.Errorf("FormatComparison = %q, expected %q", result, expected)
+	}
+}
