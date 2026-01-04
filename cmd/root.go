@@ -26,6 +26,8 @@ Usage:
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
   did delete <index>                            Delete an entry (with confirmation)
+  did undo                                      Restore the most recently deleted entry
+  did purge                                     Permanently remove all soft-deleted entries
   did validate                                  Check storage file health
   did restore [n]                               Restore from backup (default: most recent)
   did search <keyword>                          Search entries by keyword
@@ -200,6 +202,8 @@ func init() {
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(undoCmd)
+	rootCmd.AddCommand(purgeCmd)
 
 	// Add persistent filter flags (apply to all commands)
 	rootCmd.PersistentFlags().String("project", "", "Filter entries by project")
