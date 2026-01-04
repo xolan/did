@@ -94,17 +94,26 @@ func runStats(cmd *cobra.Command, args []string) {
 
 	// Determine the time period based on --month flag
 	var start, end time.Time
+	var prevStart, prevEnd time.Time
 	var periodName string
+	var comparisonPeriod string
 	if showMonth {
 		start, end = timeutil.ThisMonth()
+		prevStart, prevEnd = timeutil.LastMonth()
 		periodName = "this month"
+		comparisonPeriod = "month"
 	} else {
 		start, end = timeutil.ThisWeek()
+		prevStart, prevEnd = timeutil.LastWeek()
 		periodName = "this week"
+		comparisonPeriod = "week"
 	}
 
-	// Calculate statistics
+	// Calculate statistics for current period
 	statistics := stats.CalculateStatistics(activeEntries, start, end)
+
+	// Calculate statistics for previous period for comparison
+	previousStatistics := stats.CalculateStatistics(activeEntries, prevStart, prevEnd)
 
 	// Display header
 	_, _ = fmt.Fprintf(deps.Stdout, "Statistics for %s\n", periodName)
@@ -113,6 +122,12 @@ func runStats(cmd *cobra.Command, args []string) {
 
 	// Display statistics
 	displayStatistics(statistics)
+
+	// Display comparison to previous period
+	diffMinutes := stats.CompareStatistics(statistics, previousStatistics)
+	comparison := stats.FormatComparison(diffMinutes, comparisonPeriod)
+	_, _ = fmt.Fprintf(deps.Stdout, "Comparison:      %s\n", comparison)
+	_, _ = fmt.Fprintln(deps.Stdout)
 
 	// Calculate and display project breakdown if projects exist
 	projectBreakdown := stats.CalculateProjectBreakdown(activeEntries, start, end)
