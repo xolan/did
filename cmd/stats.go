@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/entry"
@@ -92,31 +93,42 @@ func runStats(cmd *cobra.Command, args []string) {
 	}
 
 	// Determine the time period based on --month flag
-	var startDate, endDate string
+	var start, end time.Time
 	var periodName string
 	if showMonth {
-		start, end := timeutil.ThisMonth()
-		startDate = start.Format("2006-01-02")
-		endDate = end.Format("2006-01-02")
+		start, end = timeutil.ThisMonth()
 		periodName = "this month"
 	} else {
-		start, end := timeutil.ThisWeek()
-		startDate = start.Format("2006-01-02")
-		endDate = end.Format("2006-01-02")
+		start, end = timeutil.ThisWeek()
 		periodName = "this week"
 	}
 
-	// Calculate statistics (placeholder - actual implementation in subtask 2.2 and 2.3)
-	_ = activeEntries
-	_ = startDate
-	_ = endDate
-	_ = stats.Statistics{}
+	// Calculate statistics
+	statistics := stats.CalculateStatistics(activeEntries, start, end)
 
 	// Display header
 	_, _ = fmt.Fprintf(deps.Stdout, "Statistics for %s\n", periodName)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("=", 60))
 	_, _ = fmt.Fprintln(deps.Stdout)
 
-	// Placeholder output - actual implementation in subtask 2.2 and 2.3
-	_, _ = fmt.Fprintln(deps.Stdout, "Statistics calculation will be implemented in the next subtasks")
+	// Display statistics
+	displayStatistics(statistics)
+}
+
+// displayStatistics formats and displays statistics to stdout
+func displayStatistics(stats stats.Statistics) {
+	// Display total hours
+	_, _ = fmt.Fprintf(deps.Stdout, "Total Hours:     %s\n", formatDuration(stats.TotalMinutes))
+
+	// Display average daily hours
+	avgHours := stats.AverageMinutesPerDay / 60.0
+	_, _ = fmt.Fprintf(deps.Stdout, "Average/Day:     %.1fh\n", avgHours)
+
+	// Display entry count
+	_, _ = fmt.Fprintf(deps.Stdout, "Entries:         %d %s\n", stats.EntryCount, pluralize("entry", stats.EntryCount))
+
+	// Display days with entries (useful context)
+	_, _ = fmt.Fprintf(deps.Stdout, "Days Tracked:    %d %s\n", stats.DaysWithEntries, pluralize("day", stats.DaysWithEntries))
+
+	_, _ = fmt.Fprintln(deps.Stdout)
 }
