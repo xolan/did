@@ -22,6 +22,13 @@ type ProjectBreakdown struct {
 	EntryCount   int
 }
 
+// TagBreakdown contains statistics for a single tag
+type TagBreakdown struct {
+	Tag          string
+	TotalMinutes int
+	EntryCount   int
+}
+
 // CalculateStatistics computes statistics for entries within the given date range
 func CalculateStatistics(entries []entry.Entry, start, end time.Time) Statistics {
 	stats := Statistics{}
@@ -103,6 +110,65 @@ func CalculateProjectBreakdown(entries []entry.Entry, start, end time.Time) []Pr
 	// Convert map to slice
 	var breakdowns []ProjectBreakdown
 	for _, breakdown := range projectMap {
+		breakdowns = append(breakdowns, *breakdown)
+	}
+
+	// Sort by total minutes descending
+	sort.Slice(breakdowns, func(i, j int) bool {
+		return breakdowns[i].TotalMinutes > breakdowns[j].TotalMinutes
+	})
+
+	return breakdowns
+}
+
+// CalculateTagBreakdown groups entries by tag and returns breakdown sorted by total minutes
+// Entries with multiple tags will contribute to each tag.
+func CalculateTagBreakdown(entries []entry.Entry, start, end time.Time) []TagBreakdown {
+	if len(entries) == 0 {
+		return []TagBreakdown{}
+	}
+
+	// Group entries by tag
+	tagMap := make(map[string]*TagBreakdown)
+
+	for _, e := range entries {
+		// Skip deleted entries
+		if e.DeletedAt != nil {
+			continue
+		}
+
+		// Check if entry is within the date range
+		if (e.Timestamp.Equal(start) || e.Timestamp.After(start)) &&
+			(e.Timestamp.Equal(end) || e.Timestamp.Before(end)) {
+
+			// If entry has no tags, add to "(no tags)" group
+			if len(e.Tags) == 0 {
+				tagName := "(no tags)"
+				if _, exists := tagMap[tagName]; !exists {
+					tagMap[tagName] = &TagBreakdown{
+						Tag: tagName,
+					}
+				}
+				tagMap[tagName].TotalMinutes += e.DurationMinutes
+				tagMap[tagName].EntryCount++
+			} else {
+				// Entry has tags - add to each tag group
+				for _, tag := range e.Tags {
+					if _, exists := tagMap[tag]; !exists {
+						tagMap[tag] = &TagBreakdown{
+							Tag: tag,
+						}
+					}
+					tagMap[tag].TotalMinutes += e.DurationMinutes
+					tagMap[tag].EntryCount++
+				}
+			}
+		}
+	}
+
+	// Convert map to slice
+	var breakdowns []TagBreakdown
+	for _, breakdown := range tagMap {
 		breakdowns = append(breakdowns, *breakdown)
 	}
 
