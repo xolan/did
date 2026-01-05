@@ -103,8 +103,15 @@ func runStats(cmd *cobra.Command, args []string) {
 		periodName = "this month"
 		comparisonPeriod = "month"
 	} else {
-		start, end = timeutil.ThisWeek()
-		prevStart, prevEnd = timeutil.LastWeek()
+		// Use configured week_start_day for weekly statistics
+		now := time.Now()
+		start = timeutil.StartOfWeekWithConfig(now, deps.Config.WeekStartDay)
+		end = timeutil.EndOfWeekWithConfig(now, deps.Config.WeekStartDay)
+
+		lastWeek := now.AddDate(0, 0, -7)
+		prevStart = timeutil.StartOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+		prevEnd = timeutil.EndOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+
 		periodName = "this week"
 		comparisonPeriod = "week"
 	}
