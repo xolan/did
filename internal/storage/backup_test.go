@@ -1309,3 +1309,71 @@ func TestRestoreBackupForStorage_CreateBackupError(t *testing.T) {
 		t.Error("RestoreBackupForStorage() should return error when CreateBackup fails")
 	}
 }
+
+func TestRestoreBackupForStorage_ReadBackupPermissionError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	backupPath := storagePath + ".bak.1"
+
+	// Create storage file and backup
+	if err := os.WriteFile(storagePath, []byte("current content"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("backup content"), 0644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	// Make backup file unreadable
+	if err := os.Chmod(backupPath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(backupPath, 0644) }()
+
+	err := RestoreBackupForStorage(storagePath, 1)
+	if err == nil {
+		t.Error("RestoreBackupForStorage() should return error when backup file is unreadable")
+	}
+}
+
+func TestRestoreBackupForStorage_WriteFileError(t *testing.T) {
+	tmpDir := t.TempDir()
+	subDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdir: %v", err)
+	}
+
+	storagePath := filepath.Join(subDir, "entries.jsonl")
+	backupPath := storagePath + ".bak.1"
+
+	// Create storage file (needed for CreateBackup to work)
+	if err := os.WriteFile(storagePath, []byte("current content"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+	// Create backup file
+	if err := os.WriteFile(backupPath, []byte("backup content"), 0644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	// Read the backup content first (before making directory read-only)
+	// Then make directory read-only so WriteFile fails
+	// But CreateBackup needs write access...
+	// This is tricky because CreateBackup runs before WriteFile
+
+	// Alternative approach: Make storage file read-only after backup is read
+	// but this won't cause WriteFile to fail (it creates a new file)
+
+	// Actually, we need to make the storage file a directory to cause WriteFile to fail
+	// Remove the storage file and create a directory with the same name
+	if err := os.Remove(storagePath); err != nil {
+		t.Fatalf("Failed to remove storage file: %v", err)
+	}
+	// Create directory with same name as storage file
+	// But wait - CreateBackup checks if storage exists first, so it won't error
+	// We need storage to exist for CreateBackup, but then WriteFile should fail
+
+	// Let's use a different approach: create a subdirectory named as the storage file
+	// This won't work because CreateBackup needs to read the storage file
+
+	// Skip this test as it's very hard to trigger WriteFile error after CreateBackup succeeds
+	t.Skip("WriteFile error path is difficult to test - requires storage to exist for CreateBackup but fail for WriteFile")
+}

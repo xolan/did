@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,20 @@ import (
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/storage"
 )
+
+// countedFailingWriter is a writer that fails after a specified number of writes
+type countedFailingWriter struct {
+	failAfter int
+	writes    int
+}
+
+func (f *countedFailingWriter) Write(p []byte) (n int, err error) {
+	f.writes++
+	if f.writes > f.failAfter {
+		return 0, errors.New("simulated write error")
+	}
+	return len(p), nil
+}
 
 // ExportOutput represents the structure of the JSON export
 type ExportOutput struct {
@@ -3960,5 +3975,48 @@ func TestExportCSV_OnlyToDateIncludesFromBeginning(t *testing.T) {
 	}
 	if strings.Contains(output, "Recent entry") {
 		t.Error("Should not include recent entry after --to date")
+	}
+}
+
+func TestExportCSV_FlushError(t *testing.T) {
+	// Tests the flush error path at the end of exportCSV
+	// csv.Writer buffers writes, so the error is detected during Flush()
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "Test entry",
+		DurationMinutes: 60,
+		RawInput:        "Test entry for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &countedFailingWriter{failAfter: 0}, // Fail on first write (during flush)
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when CSV flush fails")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Failed to flush CSV output") {
+		t.Errorf("Expected CSV flush error, got: %s", stderrOutput)
 	}
 }

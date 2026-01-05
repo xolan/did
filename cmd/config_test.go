@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/xolan/did/internal/config"
+	"github.com/xolan/did/internal/osutil"
 )
 
 // TestShowConfig_NoConfigFile tests showing config when no config file exists (uses defaults)
@@ -626,18 +627,114 @@ func TestConfigCmd_Init(t *testing.T) {
 
 // TestShowConfig_GetConfigPathError tests showing config when GetConfigPath fails
 func TestShowConfig_GetConfigPathError(t *testing.T) {
-	// Note: This is hard to test because GetConfigPath uses os.UserConfigDir which
-	// only fails when HOME is not set properly. We'll test what we can.
-	// The error path in showConfig() is from line 58-64.
-	// To test this, we'd need to mock config.GetConfigPath, but it's a package function.
-	// This test documents the expected behavior.
-	t.Skip("GetConfigPath error path requires mocking package-level function")
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	// Mock UserConfigDir to return an error
+	osutil.SetProvider(&configMockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", os.ErrPermission
+		},
+	})
+
+	exitCalled := false
+	exitCode := 0
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit: func(code int) {
+			exitCalled = true
+			exitCode = code
+		},
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	showConfig()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when GetConfigPath fails")
+	}
+	if exitCode != 1 {
+		t.Errorf("Expected exit code 1, got %d", exitCode)
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Failed to determine config file location") {
+		t.Errorf("Expected stderr to contain error message, got: %s", stderrOutput)
+	}
+}
+
+// configMockPathProvider implements osutil.PathProvider for testing config error paths
+type configMockPathProvider struct {
+	userConfigDirFn func() (string, error)
+	mkdirAllFn      func(path string, perm os.FileMode) error
+}
+
+func (m *configMockPathProvider) UserConfigDir() (string, error) {
+	if m.userConfigDirFn != nil {
+		return m.userConfigDirFn()
+	}
+	return "", nil
+}
+
+func (m *configMockPathProvider) MkdirAll(path string, perm os.FileMode) error {
+	if m.mkdirAllFn != nil {
+		return m.mkdirAllFn(path, perm)
+	}
+	return nil
 }
 
 // TestInitConfig_GetConfigPathError tests initConfig when GetConfigPath fails
 func TestInitConfig_GetConfigPathError(t *testing.T) {
-	// Similar to above - requires mocking config.GetConfigPath
-	t.Skip("GetConfigPath error path requires mocking package-level function")
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	// Mock UserConfigDir to return an error
+	osutil.SetProvider(&configMockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", os.ErrPermission
+		},
+	})
+
+	exitCalled := false
+	exitCode := 0
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit: func(code int) {
+			exitCalled = true
+			exitCode = code
+		},
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	initConfig()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when GetConfigPath fails")
+	}
+	if exitCode != 1 {
+		t.Errorf("Expected exit code 1, got %d", exitCode)
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Failed to determine config file location") {
+		t.Errorf("Expected stderr to contain error message, got: %s", stderrOutput)
+	}
 }
 
 // TestInitConfig_WriteFileError tests initConfig when WriteFile fails
