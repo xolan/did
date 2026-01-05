@@ -818,3 +818,454 @@ func TestLastMonth(t *testing.T) {
 		t.Errorf("LastMonth() end %v not before ThisMonth() start %v", end, thisMonthStart)
 	}
 }
+
+func TestStartOfWeekWithConfig_Monday(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          time.Time
+		expectedMonday time.Time
+	}{
+		{
+			name:           "Monday stays Monday",
+			input:          makeTime(2024, time.January, 15, 10, 30, 0), // Monday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Tuesday goes to Monday",
+			input:          makeTime(2024, time.January, 16, 14, 0, 0), // Tuesday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Wednesday goes to Monday",
+			input:          makeTime(2024, time.January, 17, 9, 15, 0), // Wednesday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Thursday goes to Monday",
+			input:          makeTime(2024, time.January, 18, 16, 45, 0), // Thursday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Friday goes to Monday",
+			input:          makeTime(2024, time.January, 19, 11, 0, 0), // Friday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Saturday goes to Monday",
+			input:          makeTime(2024, time.January, 20, 8, 30, 0), // Saturday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Sunday goes to previous Monday",
+			input:          makeTime(2024, time.January, 21, 20, 0, 0), // Sunday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Sunday at midnight",
+			input:          makeTime(2024, time.January, 21, 0, 0, 0), // Sunday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+		{
+			name:           "Sunday at end of day",
+			input:          makeTime(2024, time.January, 21, 23, 59, 59), // Sunday
+			expectedMonday: makeTime(2024, time.January, 15, 0, 0, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StartOfWeekWithConfig(tt.input, "monday")
+			if !result.Equal(tt.expectedMonday) {
+				t.Errorf("StartOfWeekWithConfig(%v [%s], monday) = %v [%s], expected %v [Monday]",
+					tt.input, tt.input.Weekday(), result, result.Weekday(), tt.expectedMonday)
+			}
+
+			// Verify it's a Monday
+			if result.Weekday() != time.Monday {
+				t.Errorf("StartOfWeekWithConfig(%v, monday) weekday = %s, expected Monday", tt.input, result.Weekday())
+			}
+
+			// Verify it's midnight
+			if result.Hour() != 0 || result.Minute() != 0 || result.Second() != 0 || result.Nanosecond() != 0 {
+				t.Errorf("StartOfWeekWithConfig(%v, monday) not midnight: got %02d:%02d:%02d.%09d",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestStartOfWeekWithConfig_Sunday(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          time.Time
+		expectedSunday time.Time
+	}{
+		{
+			name:           "Sunday stays Sunday",
+			input:          makeTime(2024, time.January, 21, 10, 30, 0), // Sunday
+			expectedSunday: makeTime(2024, time.January, 21, 0, 0, 0),
+		},
+		{
+			name:           "Monday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 15, 14, 0, 0), // Monday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Tuesday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 16, 9, 15, 0), // Tuesday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Wednesday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 17, 16, 45, 0), // Wednesday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Thursday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 18, 11, 0, 0), // Thursday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Friday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 19, 8, 30, 0), // Friday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Saturday goes to previous Sunday",
+			input:          makeTime(2024, time.January, 20, 20, 0, 0), // Saturday
+			expectedSunday: makeTime(2024, time.January, 14, 0, 0, 0),
+		},
+		{
+			name:           "Sunday at midnight",
+			input:          makeTime(2024, time.January, 21, 0, 0, 0), // Sunday
+			expectedSunday: makeTime(2024, time.January, 21, 0, 0, 0),
+		},
+		{
+			name:           "Sunday at end of day",
+			input:          makeTime(2024, time.January, 21, 23, 59, 59), // Sunday
+			expectedSunday: makeTime(2024, time.January, 21, 0, 0, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StartOfWeekWithConfig(tt.input, "sunday")
+			if !result.Equal(tt.expectedSunday) {
+				t.Errorf("StartOfWeekWithConfig(%v [%s], sunday) = %v [%s], expected %v [Sunday]",
+					tt.input, tt.input.Weekday(), result, result.Weekday(), tt.expectedSunday)
+			}
+
+			// Verify it's a Sunday
+			if result.Weekday() != time.Sunday {
+				t.Errorf("StartOfWeekWithConfig(%v, sunday) weekday = %s, expected Sunday", tt.input, result.Weekday())
+			}
+
+			// Verify it's midnight
+			if result.Hour() != 0 || result.Minute() != 0 || result.Second() != 0 || result.Nanosecond() != 0 {
+				t.Errorf("StartOfWeekWithConfig(%v, sunday) not midnight: got %02d:%02d:%02d.%09d",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestStartOfWeekWithConfig_SundayEdgeCases(t *testing.T) {
+	// Test the critical edge case: what happens on Sunday with different week start settings
+	sundayDate := makeTime(2024, time.January, 21, 14, 30, 0) // Sunday Jan 21, 2024
+
+	t.Run("Sunday with monday start goes to previous Monday", func(t *testing.T) {
+		result := StartOfWeekWithConfig(sundayDate, "monday")
+		expected := makeTime(2024, time.January, 15, 0, 0, 0) // Monday Jan 15
+
+		if !result.Equal(expected) {
+			t.Errorf("StartOfWeekWithConfig(Sunday, monday) = %v [%s], expected %v [Monday]",
+				result, result.Weekday(), expected)
+		}
+		if result.Weekday() != time.Monday {
+			t.Errorf("Expected Monday, got %s", result.Weekday())
+		}
+	})
+
+	t.Run("Sunday with sunday start stays same Sunday", func(t *testing.T) {
+		result := StartOfWeekWithConfig(sundayDate, "sunday")
+		expected := makeTime(2024, time.January, 21, 0, 0, 0) // Same Sunday at midnight
+
+		if !result.Equal(expected) {
+			t.Errorf("StartOfWeekWithConfig(Sunday, sunday) = %v [%s], expected %v [Sunday]",
+				result, result.Weekday(), expected)
+		}
+		if result.Weekday() != time.Sunday {
+			t.Errorf("Expected Sunday, got %s", result.Weekday())
+		}
+	})
+}
+
+func TestStartOfWeekWithConfig_MondayEdgeCases(t *testing.T) {
+	// Test the edge case: what happens on Monday with different week start settings
+	mondayDate := makeTime(2024, time.January, 15, 14, 30, 0) // Monday Jan 15, 2024
+
+	t.Run("Monday with monday start stays same Monday", func(t *testing.T) {
+		result := StartOfWeekWithConfig(mondayDate, "monday")
+		expected := makeTime(2024, time.January, 15, 0, 0, 0) // Same Monday at midnight
+
+		if !result.Equal(expected) {
+			t.Errorf("StartOfWeekWithConfig(Monday, monday) = %v [%s], expected %v [Monday]",
+				result, result.Weekday(), expected)
+		}
+		if result.Weekday() != time.Monday {
+			t.Errorf("Expected Monday, got %s", result.Weekday())
+		}
+	})
+
+	t.Run("Monday with sunday start goes to previous Sunday", func(t *testing.T) {
+		result := StartOfWeekWithConfig(mondayDate, "sunday")
+		expected := makeTime(2024, time.January, 14, 0, 0, 0) // Previous Sunday Jan 14
+
+		if !result.Equal(expected) {
+			t.Errorf("StartOfWeekWithConfig(Monday, sunday) = %v [%s], expected %v [Sunday]",
+				result, result.Weekday(), expected)
+		}
+		if result.Weekday() != time.Sunday {
+			t.Errorf("Expected Sunday, got %s", result.Weekday())
+		}
+	})
+}
+
+func TestStartOfWeekWithConfig_MonthBoundary(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          time.Time
+		weekStartDay   string
+		expectedStart  time.Time
+		expectedWeekday time.Weekday
+	}{
+		{
+			name:           "Feb 1 with monday start crosses to January",
+			input:          makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
+			weekStartDay:   "monday",
+			expectedStart:  makeTime(2024, time.January, 29, 0, 0, 0), // Monday Jan 29
+			expectedWeekday: time.Monday,
+		},
+		{
+			name:           "Feb 1 with sunday start stays in February",
+			input:          makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
+			weekStartDay:   "sunday",
+			expectedStart:  makeTime(2024, time.January, 28, 0, 0, 0), // Sunday Jan 28
+			expectedWeekday: time.Sunday,
+		},
+		{
+			name:           "March 3 (Sunday) with sunday start",
+			input:          makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
+			weekStartDay:   "sunday",
+			expectedStart:  makeTime(2024, time.March, 3, 0, 0, 0), // Same Sunday
+			expectedWeekday: time.Sunday,
+		},
+		{
+			name:           "March 3 (Sunday) with monday start crosses to February",
+			input:          makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
+			weekStartDay:   "monday",
+			expectedStart:  makeTime(2024, time.February, 26, 0, 0, 0), // Monday Feb 26
+			expectedWeekday: time.Monday,
+		},
+		{
+			name:           "Jan 1 2024 (Monday) with monday start",
+			input:          makeTime(2024, time.January, 1, 10, 0, 0),
+			weekStartDay:   "monday",
+			expectedStart:  makeTime(2024, time.January, 1, 0, 0, 0),
+			expectedWeekday: time.Monday,
+		},
+		{
+			name:           "Jan 1 2024 (Monday) with sunday start crosses to previous year",
+			input:          makeTime(2024, time.January, 1, 10, 0, 0),
+			weekStartDay:   "sunday",
+			expectedStart:  makeTime(2023, time.December, 31, 0, 0, 0), // Sunday Dec 31, 2023
+			expectedWeekday: time.Sunday,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StartOfWeekWithConfig(tt.input, tt.weekStartDay)
+			if !result.Equal(tt.expectedStart) {
+				t.Errorf("StartOfWeekWithConfig(%v, %s) = %v, expected %v",
+					tt.input, tt.weekStartDay, result, tt.expectedStart)
+			}
+			if result.Weekday() != tt.expectedWeekday {
+				t.Errorf("StartOfWeekWithConfig(%v, %s) weekday = %s, expected %s",
+					tt.input, tt.weekStartDay, result.Weekday(), tt.expectedWeekday)
+			}
+		})
+	}
+}
+
+func TestEndOfWeekWithConfig_Monday(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          time.Time
+		expectedSunday time.Time
+	}{
+		{
+			name:           "Monday to Sunday",
+			input:          makeTime(2024, time.January, 15, 10, 0, 0), // Monday
+			expectedSunday: makeTime(2024, time.January, 21, 23, 59, 59),
+		},
+		{
+			name:           "Wednesday to Sunday",
+			input:          makeTime(2024, time.January, 17, 14, 30, 0), // Wednesday
+			expectedSunday: makeTime(2024, time.January, 21, 23, 59, 59),
+		},
+		{
+			name:           "Sunday stays same Sunday",
+			input:          makeTime(2024, time.January, 21, 8, 0, 0), // Sunday
+			expectedSunday: makeTime(2024, time.January, 21, 23, 59, 59),
+		},
+		{
+			name:           "Saturday to Sunday",
+			input:          makeTime(2024, time.January, 20, 16, 0, 0), // Saturday
+			expectedSunday: makeTime(2024, time.January, 21, 23, 59, 59),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := EndOfWeekWithConfig(tt.input, "monday")
+
+			// Check the date components
+			if result.Year() != tt.expectedSunday.Year() || result.Month() != tt.expectedSunday.Month() || result.Day() != tt.expectedSunday.Day() {
+				t.Errorf("EndOfWeekWithConfig(%v, monday) date = %v, expected %v", tt.input, result, tt.expectedSunday)
+			}
+
+			// Verify it's a Sunday
+			if result.Weekday() != time.Sunday {
+				t.Errorf("EndOfWeekWithConfig(%v, monday) weekday = %s, expected Sunday", tt.input, result.Weekday())
+			}
+
+			// Should be 23:59:59.999999999
+			if result.Hour() != 23 || result.Minute() != 59 || result.Second() != 59 || result.Nanosecond() != 999999999 {
+				t.Errorf("EndOfWeekWithConfig(%v, monday) = %02d:%02d:%02d.%09d, expected 23:59:59.999999999",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestEndOfWeekWithConfig_Sunday(t *testing.T) {
+	tests := []struct {
+		name             string
+		input            time.Time
+		expectedSaturday time.Time
+	}{
+		{
+			name:             "Sunday to Saturday",
+			input:            makeTime(2024, time.January, 21, 10, 0, 0), // Sunday
+			expectedSaturday: makeTime(2024, time.January, 27, 23, 59, 59),
+		},
+		{
+			name:             "Monday to Saturday",
+			input:            makeTime(2024, time.January, 15, 14, 30, 0), // Monday
+			expectedSaturday: makeTime(2024, time.January, 20, 23, 59, 59),
+		},
+		{
+			name:             "Wednesday to Saturday",
+			input:            makeTime(2024, time.January, 17, 8, 0, 0), // Wednesday
+			expectedSaturday: makeTime(2024, time.January, 20, 23, 59, 59),
+		},
+		{
+			name:             "Saturday stays same Saturday",
+			input:            makeTime(2024, time.January, 20, 16, 0, 0), // Saturday
+			expectedSaturday: makeTime(2024, time.January, 20, 23, 59, 59),
+		},
+		{
+			name:             "Friday to Saturday",
+			input:            makeTime(2024, time.January, 19, 11, 30, 0), // Friday
+			expectedSaturday: makeTime(2024, time.January, 20, 23, 59, 59),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := EndOfWeekWithConfig(tt.input, "sunday")
+
+			// Check the date components
+			if result.Year() != tt.expectedSaturday.Year() || result.Month() != tt.expectedSaturday.Month() || result.Day() != tt.expectedSaturday.Day() {
+				t.Errorf("EndOfWeekWithConfig(%v, sunday) date = %v, expected %v", tt.input, result, tt.expectedSaturday)
+			}
+
+			// Verify it's a Saturday
+			if result.Weekday() != time.Saturday {
+				t.Errorf("EndOfWeekWithConfig(%v, sunday) weekday = %s, expected Saturday", tt.input, result.Weekday())
+			}
+
+			// Should be 23:59:59.999999999
+			if result.Hour() != 23 || result.Minute() != 59 || result.Second() != 59 || result.Nanosecond() != 999999999 {
+				t.Errorf("EndOfWeekWithConfig(%v, sunday) = %02d:%02d:%02d.%09d, expected 23:59:59.999999999",
+					tt.input, result.Hour(), result.Minute(), result.Second(), result.Nanosecond())
+			}
+		})
+	}
+}
+
+func TestEndOfWeekWithConfig_WeekDuration(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        time.Time
+		weekStartDay string
+	}{
+		{
+			name:         "monday start week",
+			input:        makeTime(2024, time.January, 17, 12, 0, 0),
+			weekStartDay: "monday",
+		},
+		{
+			name:         "sunday start week",
+			input:        makeTime(2024, time.January, 17, 12, 0, 0),
+			weekStartDay: "sunday",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := StartOfWeekWithConfig(tt.input, tt.weekStartDay)
+			end := EndOfWeekWithConfig(tt.input, tt.weekStartDay)
+
+			// Start should be before end
+			if !start.Before(end) {
+				t.Errorf("Week start %v not before end %v", start, end)
+			}
+
+			// Duration should be approximately 7 days
+			duration := end.Sub(start)
+			expectedDuration := 7*24*time.Hour - time.Nanosecond
+			if duration != expectedDuration {
+				t.Errorf("Week duration = %v, expected %v", duration, expectedDuration)
+			}
+		})
+	}
+}
+
+func TestStartOfWeekWithConfig_DefaultsToMonday(t *testing.T) {
+	// Test that non-"sunday" values default to monday behavior
+	input := makeTime(2024, time.January, 17, 12, 0, 0) // Wednesday
+
+	tests := []struct {
+		name         string
+		weekStartDay string
+	}{
+		{"empty string", ""},
+		{"invalid value", "tuesday"},
+		{"uppercase Monday", "Monday"},
+		{"SUNDAY uppercase", "SUNDAY"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StartOfWeekWithConfig(input, tt.weekStartDay)
+			expectedMonday := StartOfWeek(input)
+
+			if !result.Equal(expectedMonday) {
+				t.Errorf("StartOfWeekWithConfig(%v, %q) = %v [%s], expected %v [Monday] (should default to monday)",
+					input, tt.weekStartDay, result, result.Weekday(), expectedMonday)
+			}
+		})
+	}
+}
