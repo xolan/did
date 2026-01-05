@@ -158,11 +158,19 @@ var yCmd = &cobra.Command{
 var wCmd = &cobra.Command{
 	Use:   "w",
 	Short: "List this week's entries",
-	Long:  `List all time tracking entries logged this week (Monday-Sunday).`,
+	Long:  `List all time tracking entries logged this week (Monday-Sunday or Sunday-Saturday based on config).`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
-		listEntries(cmd, "this week", timeutil.ThisWeek)
+
+		// Create time range function that uses config's week_start_day
+		thisWeekFunc := func() (time.Time, time.Time) {
+			now := time.Now()
+			return timeutil.StartOfWeekWithConfig(now, deps.Config.WeekStartDay),
+				timeutil.EndOfWeekWithConfig(now, deps.Config.WeekStartDay)
+		}
+
+		listEntries(cmd, "this week", thisWeekFunc)
 	},
 }
 
@@ -170,11 +178,19 @@ var wCmd = &cobra.Command{
 var lwCmd = &cobra.Command{
 	Use:   "lw",
 	Short: "List last week's entries",
-	Long:  `List all time tracking entries logged last week (Monday-Sunday).`,
+	Long:  `List all time tracking entries logged last week (Monday-Sunday or Sunday-Saturday based on config).`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
-		listEntries(cmd, "last week", timeutil.LastWeek)
+
+		// Create time range function that uses config's week_start_day
+		lastWeekFunc := func() (time.Time, time.Time) {
+			lastWeek := time.Now().AddDate(0, 0, -7)
+			return timeutil.StartOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay),
+				timeutil.EndOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+		}
+
+		listEntries(cmd, "last week", lastWeekFunc)
 	},
 }
 

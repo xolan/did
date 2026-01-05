@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/xolan/did/internal/config"
 	"github.com/xolan/did/internal/storage"
 )
 
@@ -14,16 +15,28 @@ type Deps struct {
 	Stdin       io.Reader
 	Exit        func(code int)
 	StoragePath func() (string, error)
+	Config      config.Config
 }
 
 // DefaultDeps returns the default production dependencies.
 func DefaultDeps() *Deps {
+	// Load config from file or use defaults
+	cfg := config.DefaultConfig()
+	if configPath, err := config.GetConfigPath(); err == nil {
+		if loadedCfg, err := config.LoadOrDefault(configPath); err == nil {
+			cfg = loadedCfg
+		}
+		// If LoadOrDefault fails, we silently use defaults
+		// Error handling will occur in commands that explicitly check config
+	}
+
 	return &Deps{
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 		Stdin:       os.Stdin,
 		Exit:        os.Exit,
 		StoragePath: storage.GetStoragePath,
+		Config:      cfg,
 	}
 }
 
