@@ -20,7 +20,11 @@ cmd/
   purge.go                        # Purge all soft-deleted entries command
   restore.go                      # Restore from backup command
   stats.go                        # Stats command (weekly/monthly statistics)
+  config.go                       # Config command (display and init configuration)
 internal/
+  config/
+    config.go                     # Configuration (Config struct, TOML loading, validation)
+    config_test.go
   entry/
     entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput, DeletedAt)
     parser.go                     # Duration parsing (ParseDuration)
@@ -76,6 +80,8 @@ did report @project --last 7      # Project report for last 7 days
 did report --by project --from 2024-01-01 --to 2024-01-31  # Project breakdown for date range
 did stats                         # Show statistics for current week (total hours, average, comparison)
 did stats --month                 # Show statistics for current month
+did config                        # Display current configuration settings
+did config --init                 # Create a sample configuration file with all options
 did completion [bash|zsh|fish|powershell]  # Generate shell completion scripts
 ```
 
@@ -91,12 +97,62 @@ Entries stored in JSONL format at `~/.config/did/entries.jsonl` (Linux), uses `o
 - Entries deleted more than 7 days ago are automatically purged during delete operations
 - Use `did purge` to manually remove all soft-deleted entries immediately
 
+## Configuration
+
+Configuration file is **optional** - did works perfectly without any configuration. All settings have sensible defaults.
+
+**Config file location:**
+- Linux/macOS: `~/.config/did/config.toml`
+- Windows: `%APPDATA%\did\config.toml`
+
+**Create a config file:**
+```bash
+did config --init  # Creates a sample config.toml with all options documented
+```
+
+**View current configuration:**
+```bash
+did config  # Shows current settings and config file location
+```
+
+### Configuration Options
+
+**`week_start_day`** - Which day starts the week (affects `did w`, `did lw`, and `did stats`)
+- Valid values: `"monday"` or `"sunday"`
+- Default: `"monday"` (ISO 8601 standard)
+- Example: `week_start_day = "sunday"` for US convention
+
+**`timezone`** - Timezone for time operations and display
+- Valid values: Any IANA timezone name (e.g., `"America/New_York"`, `"Europe/London"`, `"Asia/Tokyo"`) or `"Local"` for system timezone
+- Default: `"Local"` (uses system timezone)
+- Example: `timezone = "America/New_York"`
+- See available timezones: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+**`default_output_format`** - Default output format for entry listings (reserved for future use)
+- Valid values: Currently unused (reserved for future custom formats)
+- Default: `""` (uses built-in default format)
+
+### Sample Configuration
+
+```toml
+# Uncomment and modify only the settings you want to customize
+
+# Week starts on Sunday (US convention)
+week_start_day = "sunday"
+
+# Use Eastern Time
+timezone = "America/New_York"
+
+# Default output format (reserved for future use)
+# default_output_format = ""
+```
+
 ## Conventions
 
 - Tests alongside source files (`*_test.go`)
 - Internal packages under `internal/`
 - Errors written to stderr, success to stdout
-- ISO week standard (Monday-Sunday)
+- Week start day is configurable (defaults to Monday per ISO 8601)
 
 
 ## Development help
