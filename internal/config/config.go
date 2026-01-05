@@ -1,8 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 const (
@@ -51,4 +56,66 @@ func GetConfigPath() (string, error) {
 	}
 
 	return filepath.Join(appDir, ConfigFile), nil
+}
+
+// Validate checks if the Config values are valid and returns helpful error messages.
+// Validates that:
+// - week_start_day is either "monday" or "sunday" (case-insensitive)
+// - timezone is a valid IANA timezone name (e.g., "America/New_York") or "Local"
+func (c *Config) Validate() error {
+	// Normalize week_start_day to lowercase for comparison
+	weekStartDay := strings.ToLower(strings.TrimSpace(c.WeekStartDay))
+	if weekStartDay != "monday" && weekStartDay != "sunday" {
+		return fmt.Errorf("invalid week_start_day: must be 'monday' or 'sunday', got '%s'", c.WeekStartDay)
+	}
+	// Normalize the value in the config
+	c.WeekStartDay = weekStartDay
+
+	// Validate timezone
+	if c.Timezone != "" && c.Timezone != "Local" {
+		// Try to load the timezone to validate it exists
+		_, err := time.LoadLocation(c.Timezone)
+		if err != nil {
+			return fmt.Errorf("invalid timezone: '%s' is not a valid IANA timezone (e.g., 'America/New_York', 'Europe/London')", c.Timezone)
+		}
+	}
+
+	return nil
+}
+
+// Load reads and parses the TOML config file at the given path.
+// Returns an error if the file cannot be read or parsed, or if validation fails.
+// The returned Config is validated and normalized (e.g., week_start_day is lowercase).
+func Load(path string) (Config, error) {
+	var cfg Config
+
+	// Read the TOML file
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return Config{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Validate the loaded config
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+
+	return cfg, nil
+}
+
+// LoadOrDefault attempts to load the config from the given path.
+// If the file doesn't exist, returns DefaultConfig() instead.
+// Returns an error if the file exists but cannot be parsed or is invalid.
+func LoadOrDefault(path string) (Config, error) {
+	// Check if file exists
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return default config
+			return DefaultConfig(), nil
+		}
+		// Some other error occurred while checking the file
+		return Config{}, err
+	}
+
+	// File exists, try to load it
+	return Load(path)
 }
