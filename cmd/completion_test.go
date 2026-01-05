@@ -472,3 +472,255 @@ func TestGenerateCompletion_ContainsDidCommand(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateCompletion_SpecialCharacters tests handling of shell names with special characters
+func TestGenerateCompletion_SpecialCharacters(t *testing.T) {
+	tests := []struct {
+		name  string
+		shell string
+	}{
+		{"shell with space", "ba sh"},
+		{"shell with dash", "ba-sh"},
+		{"shell with underscore", "ba_sh"},
+		{"shell with number", "bash5"},
+		{"shell with dot", "bash.sh"},
+		{"shell with slash", "bash/zsh"},
+		{"shell with backslash", "bash\\zsh"},
+		{"shell with tab", "bash\tzsh"},
+		{"shell with newline", "bash\nzsh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCalled := false
+			exitCode := 0
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			d := &Deps{
+				Stdout: stdout,
+				Stderr: stderr,
+				Stdin:  strings.NewReader(""),
+				Exit: func(code int) {
+					exitCalled = true
+					exitCode = code
+				},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
+
+			generateCompletion(tt.shell)
+
+			// All special character inputs should be treated as invalid
+			if !exitCalled {
+				t.Errorf("Expected exit to be called for shell %q", tt.shell)
+			}
+			if exitCode != 1 {
+				t.Errorf("Expected exit code 1 for shell %q, got %d", tt.shell, exitCode)
+			}
+
+			errOutput := stderr.String()
+			if !strings.Contains(errOutput, "Unsupported shell") {
+				t.Errorf("Expected 'Unsupported shell' error for %q, got: %s", tt.shell, errOutput)
+			}
+
+			// No output should be written to stdout
+			if stdout.String() != "" {
+				t.Errorf("Expected no stdout for invalid shell %q, got: %s", tt.shell, stdout.String())
+			}
+		})
+	}
+}
+
+// TestGenerateCompletion_UnicodeShellNames tests handling of unicode in shell names
+func TestGenerateCompletion_UnicodeShellNames(t *testing.T) {
+	tests := []struct {
+		name  string
+		shell string
+	}{
+		{"emoji", "bash🚀"},
+		{"chinese characters", "中文"},
+		{"arabic characters", "العربية"},
+		{"russian characters", "русский"},
+		{"mixed unicode", "bäsh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCalled := false
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			d := &Deps{
+				Stdout: stdout,
+				Stderr: stderr,
+				Stdin:  strings.NewReader(""),
+				Exit: func(code int) {
+					exitCalled = true
+				},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
+
+			generateCompletion(tt.shell)
+
+			// Unicode shell names should be treated as invalid
+			if !exitCalled {
+				t.Errorf("Expected exit to be called for unicode shell %q", tt.shell)
+			}
+
+			errOutput := stderr.String()
+			if !strings.Contains(errOutput, "Unsupported shell") {
+				t.Errorf("Expected 'Unsupported shell' error for %q, got: %s", tt.shell, errOutput)
+			}
+		})
+	}
+}
+
+// TestGenerateCompletion_VeryLongShellName tests handling of excessively long shell names
+func TestGenerateCompletion_VeryLongShellName(t *testing.T) {
+	// Create a very long shell name (1000 characters)
+	longShell := strings.Repeat("bash", 250)
+
+	exitCalled := false
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit: func(code int) {
+			exitCalled = true
+		},
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	generateCompletion(longShell)
+
+	// Very long shell names should be treated as invalid
+	if !exitCalled {
+		t.Error("Expected exit to be called for very long shell name")
+	}
+
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Unsupported shell") {
+		t.Errorf("Expected 'Unsupported shell' error, got: %s", errOutput)
+	}
+
+	// No output should be written to stdout
+	if stdout.String() != "" {
+		t.Errorf("Expected no stdout for invalid shell, got: %s", stdout.String())
+	}
+}
+
+// TestGenerateCompletion_WhitespaceOnly tests handling of whitespace-only shell names
+func TestGenerateCompletion_WhitespaceOnly(t *testing.T) {
+	tests := []struct {
+		name  string
+		shell string
+	}{
+		{"single space", " "},
+		{"multiple spaces", "   "},
+		{"tab", "\t"},
+		{"multiple tabs", "\t\t\t"},
+		{"mixed whitespace", " \t \n "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCalled := false
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			d := &Deps{
+				Stdout: stdout,
+				Stderr: stderr,
+				Stdin:  strings.NewReader(""),
+				Exit: func(code int) {
+					exitCalled = true
+				},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
+
+			generateCompletion(tt.shell)
+
+			// Whitespace-only input should be treated as invalid
+			if !exitCalled {
+				t.Errorf("Expected exit to be called for whitespace shell %q", tt.shell)
+			}
+
+			errOutput := stderr.String()
+			if !strings.Contains(errOutput, "Unsupported shell") {
+				t.Errorf("Expected 'Unsupported shell' error for %q, got: %s", tt.shell, errOutput)
+			}
+		})
+	}
+}
+
+// TestGenerateCompletion_SimilarShellNames tests that only exact matches work
+func TestGenerateCompletion_SimilarShellNames(t *testing.T) {
+	tests := []struct {
+		name  string
+		shell string
+	}{
+		{"bash with trailing space", "bash "},
+		{"bash with leading space", " bash"},
+		{"bash with surrounding spaces", " bash "},
+		{"zsh with tab", "zsh\t"},
+		{"fish with newline", "fish\n"},
+		{"bash-completion", "bash-completion"},
+		{"zbash", "zbash"},
+		{"bashrc", "bashrc"},
+		{"fishes", "fishes"},
+		{"zshell", "zshell"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCalled := false
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			d := &Deps{
+				Stdout: stdout,
+				Stderr: stderr,
+				Stdin:  strings.NewReader(""),
+				Exit: func(code int) {
+					exitCalled = true
+				},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
+
+			generateCompletion(tt.shell)
+
+			// Only exact shell names should work
+			if !exitCalled {
+				t.Errorf("Expected exit to be called for near-match shell %q", tt.shell)
+			}
+
+			errOutput := stderr.String()
+			if !strings.Contains(errOutput, "Unsupported shell") {
+				t.Errorf("Expected 'Unsupported shell' error for %q, got: %s", tt.shell, errOutput)
+			}
+
+			// No output should be written to stdout
+			if stdout.String() != "" {
+				t.Errorf("Expected no stdout for invalid shell %q, got: %s", tt.shell, stdout.String())
+			}
+		})
+	}
+}
