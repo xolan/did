@@ -7,6 +7,7 @@ import (
 
 	"github.com/xolan/did/internal/config"
 	"github.com/xolan/did/internal/storage"
+	"github.com/xolan/did/internal/timer"
 )
 
 // Deps holds external dependencies for CLI commands, enabling testability.
@@ -16,6 +17,7 @@ type Deps struct {
 	Stdin       io.Reader
 	Exit        func(code int)
 	StoragePath func() (string, error)
+	TimerPath   func() (string, error)
 	Config      config.Config
 }
 
@@ -41,6 +43,7 @@ func DefaultDeps() *Deps {
 		Stdin:       os.Stdin,
 		Exit:        os.Exit,
 		StoragePath: storage.GetStoragePath,
+		TimerPath:   timer.GetTimerPath,
 		Config:      cfg,
 	}
 }
