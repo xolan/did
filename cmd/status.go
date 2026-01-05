@@ -28,7 +28,7 @@ Examples:
 // showStatus displays the current timer status
 func showStatus() {
 	// Get timer path
-	timerPath, err := timer.GetTimerPath()
+	timerPath, err := deps.TimerPath()
 	if err != nil {
 		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine timer location")
 		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)

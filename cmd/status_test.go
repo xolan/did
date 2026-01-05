@@ -36,6 +36,8 @@ func TestShowStatus_TimerRunning(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -102,6 +104,8 @@ func TestShowStatus_ElapsedTimeFormatting(t *testing.T) {
 				StoragePath: func() (string, error) {
 					return "", nil
 				},
+				TimerPath: timer.GetTimerPath,
+				Config:    DefaultDeps().Config,
 			}
 			SetDeps(d)
 			defer ResetDeps()
@@ -143,6 +147,8 @@ func TestShowStatus_WithProjectAndTags(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -184,6 +190,8 @@ func TestShowStatus_NoTimerRunning(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -236,6 +244,8 @@ func TestShowStatus_StartTimeFormatting_Today(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -278,6 +288,8 @@ func TestShowStatus_StartTimeFormatting_PastDate(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -321,6 +333,8 @@ func TestShowStatus_SpecialCharacters(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -367,6 +381,8 @@ func TestStatusCommand_Run(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -404,6 +420,8 @@ func TestShowStatus_ZeroElapsedTime(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -445,6 +463,8 @@ func TestShowStatus_MultipleTagsOrdering(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()

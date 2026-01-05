@@ -77,6 +77,8 @@ func TestStopTimer_Success(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -146,6 +148,8 @@ func TestStopTimer_WithProjectAndTags(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -253,6 +257,8 @@ func TestStopTimer_DurationRounding(t *testing.T) {
 				StoragePath: func() (string, error) {
 					return storagePath, nil
 				},
+				TimerPath: timer.GetTimerPath,
+				Config:    DefaultDeps().Config,
 			}
 			SetDeps(d)
 			defer ResetDeps()
@@ -305,6 +311,8 @@ func TestStopTimer_MinimumDuration(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -348,6 +356,8 @@ func TestStopTimer_NoTimerRunning(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -410,6 +420,8 @@ func TestStopTimer_TimerClearedAfterStop(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -457,6 +469,8 @@ func TestStopCommand_Run(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -497,6 +511,8 @@ func TestStopTimer_EntryRawInput(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()

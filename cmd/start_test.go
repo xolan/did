@@ -86,6 +86,8 @@ func TestStartTimer_Success(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -134,6 +136,8 @@ func TestStartTimer_WithProjectAndTags(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -207,6 +211,8 @@ func TestStartTimer_AlreadyRunning_NoForce(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -275,6 +281,8 @@ func TestStartTimer_AlreadyRunning_WithForce(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -319,6 +327,8 @@ func TestStartTimer_EmptyDescription(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -352,6 +362,8 @@ func TestStartTimer_OnlyProjectAndTags(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -384,6 +396,8 @@ func TestStartCommand_Run(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
@@ -409,6 +423,8 @@ func TestStartTimer_WhitespaceHandling(t *testing.T) {
 		StoragePath: func() (string, error) {
 			return "", nil
 		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
 	}
 	SetDeps(d)
 	defer ResetDeps()
