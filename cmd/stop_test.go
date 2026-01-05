@@ -18,15 +18,15 @@ func TestCalculateDurationMinutes(t *testing.T) {
 		duration time.Duration
 		expected int
 	}{
-		{"0 seconds", 0, 1},                          // minimum is 1 minute
-		{"30 seconds", 30 * time.Second, 1},          // rounds to 1 minute (minimum)
-		{"44 seconds", 44 * time.Second, 1},          // rounds down to 1 minute (minimum)
-		{"45 seconds", 45 * time.Second, 1},          // rounds up to 1 minute
-		{"1 minute", 1 * time.Minute, 1},             // exactly 1 minute
-		{"1 minute 29 seconds", 89 * time.Second, 1}, // rounds down to 1 minute
-		{"1 minute 30 seconds", 90 * time.Second, 2}, // rounds up to 2 minutes
-		{"2 minutes", 2 * time.Minute, 2},            // exactly 2 minutes
-		{"30 minutes", 30 * time.Minute, 30},         // 30 minutes
+		{"0 seconds", 0, 1},                                            // minimum is 1 minute
+		{"30 seconds", 30 * time.Second, 1},                            // rounds to 1 minute (minimum)
+		{"44 seconds", 44 * time.Second, 1},                            // rounds down to 1 minute (minimum)
+		{"45 seconds", 45 * time.Second, 1},                            // rounds up to 1 minute
+		{"1 minute", 1 * time.Minute, 1},                               // exactly 1 minute
+		{"1 minute 29 seconds", 89 * time.Second, 1},                   // rounds down to 1 minute
+		{"1 minute 30 seconds", 90 * time.Second, 2},                   // rounds up to 2 minutes
+		{"2 minutes", 2 * time.Minute, 2},                              // exactly 2 minutes
+		{"30 minutes", 30 * time.Minute, 30},                           // 30 minutes
 		{"59 minutes 29 seconds", 59*time.Minute + 29*time.Second, 59}, // rounds down
 		{"59 minutes 30 seconds", 59*time.Minute + 30*time.Second, 60}, // rounds up to 1 hour
 		{"1 hour", 60 * time.Minute, 60},                               // exactly 1 hour
