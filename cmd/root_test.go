@@ -67,6 +67,22 @@ func resetFilterFlags(cmd *cobra.Command) {
 	}
 }
 
+// resetTimePeriodFlags clears all time period flags to avoid test contamination
+func resetTimePeriodFlags(cmd *cobra.Command) {
+	// Reset boolean flags
+	_ = cmd.Flags().Set("yesterday", "false")
+	_ = cmd.Flags().Set("this-week", "false")
+	_ = cmd.Flags().Set("prev-week", "false")
+	_ = cmd.Flags().Set("this-month", "false")
+	_ = cmd.Flags().Set("prev-month", "false")
+	// Reset int flag
+	_ = cmd.Flags().Set("last", "0")
+	// Reset string flags
+	_ = cmd.Flags().Set("from", "")
+	_ = cmd.Flags().Set("to", "")
+	_ = cmd.Flags().Set("date", "")
+}
+
 func TestPluralize(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -883,6 +899,10 @@ func TestRootCommand_NoArgs(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Call the root command's Run function directly with no args
 	rootCmd.Run(rootCmd, []string{})
 
@@ -900,6 +920,10 @@ func TestRootCommand_WithArgs(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Call the root command's Run function with args
 	rootCmd.Run(rootCmd, []string{"test", "task", "for", "1h"})
 
@@ -908,7 +932,7 @@ func TestRootCommand_WithArgs(t *testing.T) {
 	}
 }
 
-func TestYesterday_Command(t *testing.T) {
+func TestYesterday_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -916,14 +940,21 @@ func TestYesterday_Command(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	yCmd.Run(yCmd, []string{})
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set yesterday flag
+	_ = rootCmd.Flags().Set("yesterday", "true")
+
+	rootCmd.Run(rootCmd, []string{})
 
 	if !strings.Contains(stdout.String(), "No entries found for yesterday") {
 		t.Errorf("Expected 'No entries found for yesterday', got: %s", stdout.String())
 	}
 }
 
-func TestThisWeek_Command(t *testing.T) {
+func TestThisWeek_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -931,14 +962,21 @@ func TestThisWeek_Command(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	wCmd.Run(wCmd, []string{})
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set this-week flag
+	_ = rootCmd.Flags().Set("this-week", "true")
+
+	rootCmd.Run(rootCmd, []string{})
 
 	if !strings.Contains(stdout.String(), "No entries found for this week") {
 		t.Errorf("Expected 'No entries found for this week' (with date range), got: %s", stdout.String())
 	}
 }
 
-func TestLastWeek_Command(t *testing.T) {
+func TestPrevWeek_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -946,14 +984,21 @@ func TestLastWeek_Command(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	lwCmd.Run(lwCmd, []string{})
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	if !strings.Contains(stdout.String(), "No entries found for last week") {
-		t.Errorf("Expected 'No entries found for last week', got: %s", stdout.String())
+	// Set prev-week flag
+	_ = rootCmd.Flags().Set("prev-week", "true")
+
+	rootCmd.Run(rootCmd, []string{})
+
+	if !strings.Contains(stdout.String(), "No entries found for previous week") {
+		t.Errorf("Expected 'No entries found for previous week', got: %s", stdout.String())
 	}
 }
 
-// Test that 'did w' shows correct date range with monday week start (default)
+// Test that '--this-week' shows correct date range with monday week start (default)
 func TestThisWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
@@ -969,13 +1014,18 @@ func TestThisWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	now := time.Now()
 	start := timeutil.StartOfWeekWithConfig(now, "monday")
 	end := timeutil.EndOfWeekWithConfig(now, "monday")
 
-	// Run command
-	wCmd.Run(wCmd, []string{})
+	// Run command with --this-week flag
+	_ = rootCmd.Flags().Set("this-week", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1006,7 +1056,7 @@ func TestThisWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	}
 }
 
-// Test that 'did w' shows correct date range with sunday week start
+// Test that '--this-week' shows correct date range with sunday week start
 func TestThisWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
@@ -1022,13 +1072,18 @@ func TestThisWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	now := time.Now()
 	start := timeutil.StartOfWeekWithConfig(now, "sunday")
 	end := timeutil.EndOfWeekWithConfig(now, "sunday")
 
-	// Run command
-	wCmd.Run(wCmd, []string{})
+	// Run command with --this-week flag
+	_ = rootCmd.Flags().Set("this-week", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1059,8 +1114,8 @@ func TestThisWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	}
 }
 
-// Test that 'did lw' shows correct date range with monday week start (default)
-func TestLastWeek_DateRangeOutput_MondayStart(t *testing.T) {
+// Test that '--prev-week' shows correct date range with monday week start (default)
+func TestPrevWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1075,13 +1130,18 @@ func TestLastWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	lastWeek := time.Now().AddDate(0, 0, -7)
 	start := timeutil.StartOfWeekWithConfig(lastWeek, "monday")
 	end := timeutil.EndOfWeekWithConfig(lastWeek, "monday")
 
-	// Run command
-	lwCmd.Run(lwCmd, []string{})
+	// Run command with --prev-week flag
+	_ = rootCmd.Flags().Set("prev-week", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1104,9 +1164,9 @@ func TestLastWeek_DateRangeOutput_MondayStart(t *testing.T) {
 		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
 	}
 
-	// Verify the header shows "last week"
-	if !strings.Contains(output, "last week") {
-		t.Errorf("Expected output to contain 'last week', got: %s", output)
+	// Verify the header shows "previous week"
+	if !strings.Contains(output, "previous week") {
+		t.Errorf("Expected output to contain 'previous week', got: %s", output)
 	}
 
 	// Verify start is a Monday
@@ -1120,8 +1180,8 @@ func TestLastWeek_DateRangeOutput_MondayStart(t *testing.T) {
 	}
 }
 
-// Test that 'did lw' shows correct date range with sunday week start
-func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
+// Test that '--prev-week' shows correct date range with sunday week start
+func TestPrevWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1136,13 +1196,18 @@ func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	lastWeek := time.Now().AddDate(0, 0, -7)
 	start := timeutil.StartOfWeekWithConfig(lastWeek, "sunday")
 	end := timeutil.EndOfWeekWithConfig(lastWeek, "sunday")
 
-	// Run command
-	lwCmd.Run(lwCmd, []string{})
+	// Run command with --prev-week flag
+	_ = rootCmd.Flags().Set("prev-week", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1165,9 +1230,9 @@ func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
 		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
 	}
 
-	// Verify the header shows "last week"
-	if !strings.Contains(output, "last week") {
-		t.Errorf("Expected output to contain 'last week', got: %s", output)
+	// Verify the header shows "previous week"
+	if !strings.Contains(output, "previous week") {
+		t.Errorf("Expected output to contain 'previous week', got: %s", output)
 	}
 
 	// Verify start is a Sunday
@@ -1181,7 +1246,7 @@ func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	}
 }
 
-func TestThisMonth_Command(t *testing.T) {
+func TestThisMonth_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1189,14 +1254,21 @@ func TestThisMonth_Command(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	mCmd.Run(mCmd, []string{})
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set this-month flag
+	_ = rootCmd.Flags().Set("this-month", "true")
+
+	rootCmd.Run(rootCmd, []string{})
 
 	if !strings.Contains(stdout.String(), "No entries found for this month") {
 		t.Errorf("Expected 'No entries found for this month' (with date range), got: %s", stdout.String())
 	}
 }
 
-func TestLastMonth_Command(t *testing.T) {
+func TestPrevMonth_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1204,14 +1276,21 @@ func TestLastMonth_Command(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	lmCmd.Run(lmCmd, []string{})
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	if !strings.Contains(stdout.String(), "No entries found for last month") {
-		t.Errorf("Expected 'No entries found for last month', got: %s", stdout.String())
+	// Set prev-month flag
+	_ = rootCmd.Flags().Set("prev-month", "true")
+
+	rootCmd.Run(rootCmd, []string{})
+
+	if !strings.Contains(stdout.String(), "No entries found for previous month") {
+		t.Errorf("Expected 'No entries found for previous month', got: %s", stdout.String())
 	}
 }
 
-// Test that 'did m' shows correct date range
+// Test that '--this-month' shows correct date range
 func TestThisMonth_DateRangeOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
@@ -1220,13 +1299,18 @@ func TestThisMonth_DateRangeOutput(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	now := time.Now()
 	start := timeutil.StartOfMonth(now)
 	end := timeutil.EndOfMonth(now)
 
-	// Run command
-	mCmd.Run(mCmd, []string{})
+	// Run command with --this-month flag
+	_ = rootCmd.Flags().Set("this-month", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1259,8 +1343,8 @@ func TestThisMonth_DateRangeOutput(t *testing.T) {
 	}
 }
 
-// Test that 'did lm' shows correct date range
-func TestLastMonth_DateRangeOutput(t *testing.T) {
+// Test that '--prev-month' shows correct date range
+func TestPrevMonth_DateRangeOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1268,13 +1352,18 @@ func TestLastMonth_DateRangeOutput(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
+	// Reset flags to avoid contamination
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
 	// Calculate expected date range
 	lastMonth := time.Now().AddDate(0, -1, 0)
 	start := timeutil.StartOfMonth(lastMonth)
 	end := timeutil.EndOfMonth(lastMonth)
 
-	// Run command
-	lmCmd.Run(lmCmd, []string{})
+	// Run command with --prev-month flag
+	_ = rootCmd.Flags().Set("prev-month", "true")
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1297,9 +1386,9 @@ func TestLastMonth_DateRangeOutput(t *testing.T) {
 		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
 	}
 
-	// Verify the header shows "last month"
-	if !strings.Contains(output, "last month") {
-		t.Errorf("Expected output to contain 'last month', got: %s", output)
+	// Verify the header shows "previous month"
+	if !strings.Contains(output, "previous month") {
+		t.Errorf("Expected output to contain 'previous month', got: %s", output)
 	}
 
 	// Verify start is the first day of the month
@@ -1359,14 +1448,16 @@ func TestYesterday_WithProjectFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(yCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Set project filter flag
-	_ = yCmd.Root().PersistentFlags().Set("project", "acme")
+	// Set project filter flag and yesterday flag
+	_ = rootCmd.PersistentFlags().Set("project", "acme")
+	_ = rootCmd.Flags().Set("yesterday", "true")
 
-	// Run yesterday command with filter
-	yCmd.Run(yCmd, []string{})
+	// Run root command with flags
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1430,11 +1521,13 @@ func TestYesterday_WithShorthandProjectFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(yCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Use shorthand @acme syntax
-	yCmd.Run(yCmd, []string{"@acme"})
+	// Set yesterday flag and use shorthand @acme syntax
+	_ = rootCmd.Flags().Set("yesterday", "true")
+	rootCmd.Run(rootCmd, []string{"@acme"})
 
 	output := stdout.String()
 
@@ -1495,14 +1588,16 @@ func TestThisWeek_WithTagFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(wCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Set tag filter flag
-	_ = wCmd.Root().PersistentFlags().Set("tag", "bugfix")
+	// Set tag filter flag and this-week flag
+	_ = rootCmd.PersistentFlags().Set("tag", "bugfix")
+	_ = rootCmd.Flags().Set("this-week", "true")
 
-	// Run this week command with filter
-	wCmd.Run(wCmd, []string{})
+	// Run root command with flags
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1566,11 +1661,13 @@ func TestThisWeek_WithShorthandTagFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(wCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Use shorthand #bugfix syntax
-	wCmd.Run(wCmd, []string{"#bugfix"})
+	// Set this-week flag and use shorthand #bugfix syntax
+	_ = rootCmd.Flags().Set("this-week", "true")
+	rootCmd.Run(rootCmd, []string{"#bugfix"})
 
 	output := stdout.String()
 
@@ -1589,7 +1686,7 @@ func TestThisWeek_WithShorthandTagFilter(t *testing.T) {
 	}
 }
 
-func TestLastWeek_WithProjectAndTagFilters(t *testing.T) {
+func TestPrevWeek_WithProjectAndTagFilters(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1632,15 +1729,17 @@ func TestLastWeek_WithProjectAndTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(lwCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Set both project and tag filters
-	_ = lwCmd.Root().PersistentFlags().Set("project", "client")
-	_ = lwCmd.Root().PersistentFlags().Set("tag", "urgent")
+	// Set both project and tag filters and prev-week flag
+	_ = rootCmd.PersistentFlags().Set("project", "client")
+	_ = rootCmd.PersistentFlags().Set("tag", "urgent")
+	_ = rootCmd.Flags().Set("prev-week", "true")
 
-	// Run last week command with filters
-	lwCmd.Run(lwCmd, []string{})
+	// Run root command with flags
+	rootCmd.Run(rootCmd, []string{})
 
 	output := stdout.String()
 
@@ -1659,8 +1758,8 @@ func TestLastWeek_WithProjectAndTagFilters(t *testing.T) {
 	}
 
 	// Should show both filters in period description
-	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "last week") {
-		t.Errorf("Expected period description to mention 'last week', '@client', and '#urgent', got: %s", output)
+	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "previous week") {
+		t.Errorf("Expected period description to mention 'previous week', '@client', and '#urgent', got: %s", output)
 	}
 
 	// Total should reflect only filtered entries (3h)
@@ -1669,7 +1768,7 @@ func TestLastWeek_WithProjectAndTagFilters(t *testing.T) {
 	}
 }
 
-func TestLastWeek_WithShorthandProjectAndTagFilters(t *testing.T) {
+func TestPrevWeek_WithShorthandProjectAndTagFilters(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
@@ -1704,11 +1803,13 @@ func TestLastWeek_WithShorthandProjectAndTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(lwCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Use shorthand syntax for both project and tag
-	lwCmd.Run(lwCmd, []string{"@client", "#urgent"})
+	// Set prev-week flag and use shorthand syntax for both project and tag
+	_ = rootCmd.Flags().Set("prev-week", "true")
+	rootCmd.Run(rootCmd, []string{"@client", "#urgent"})
 
 	output := stdout.String()
 
@@ -1722,8 +1823,8 @@ func TestLastWeek_WithShorthandProjectAndTagFilters(t *testing.T) {
 	}
 
 	// Check that filters are applied (period description should mention both filters)
-	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "last week") {
-		t.Errorf("Expected period description to mention 'last week', '@client', and '#urgent', got: %s", output)
+	if !strings.Contains(output, "@client") || !strings.Contains(output, "#urgent") || !strings.Contains(output, "previous week") {
+		t.Errorf("Expected period description to mention 'previous week', '@client', and '#urgent', got: %s", output)
 	}
 }
 
@@ -1770,11 +1871,13 @@ func TestYesterday_WithMultipleTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
-	resetFilterFlags(yCmd)
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
 
-	// Use shorthand syntax for multiple tags
-	yCmd.Run(yCmd, []string{"#bugfix", "#urgent"})
+	// Set yesterday flag and use shorthand syntax for multiple tags
+	_ = rootCmd.Flags().Set("yesterday", "true")
+	rootCmd.Run(rootCmd, []string{"#bugfix", "#urgent"})
 
 	output := stdout.String()
 
@@ -3537,7 +3640,8 @@ func TestRootCommand_WithProjectFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Set project filter flag
@@ -3608,7 +3712,8 @@ func TestRootCommand_WithShorthandProjectFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags to avoid contamination from other tests
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Use shorthand @acme syntax
@@ -3673,7 +3778,8 @@ func TestRootCommand_WithTagFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Set tag filter flag
@@ -3744,7 +3850,8 @@ func TestRootCommand_WithShorthandTagFilter(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Use shorthand #urgent syntax
@@ -3809,7 +3916,8 @@ func TestRootCommand_WithMultipleTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Set multiple tag filters (AND logic)
@@ -3898,7 +4006,8 @@ func TestRootCommand_WithProjectAndTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Set both project and tag filters (AND logic)
@@ -3982,7 +4091,8 @@ func TestRootCommand_WithShorthandProjectAndTagFilters(t *testing.T) {
 	SetDeps(d)
 	defer ResetDeps()
 
-	// Reset persistent flags
+	// Reset flags to avoid contamination from other tests
+	resetTimePeriodFlags(rootCmd)
 	resetFilterFlags(rootCmd)
 
 	// Use shorthand @acme #urgent syntax
@@ -4005,5 +4115,306 @@ func TestRootCommand_WithShorthandProjectAndTagFilters(t *testing.T) {
 
 	if !strings.Contains(output, "today (@acme #urgent)") {
 		t.Errorf("Expected 'today (@acme #urgent)' in output, got: %s", output)
+	}
+}
+
+// Tests for new time period flags
+
+func TestLastFlag_ValidDays(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for different days
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now,
+			Description:     "today work",
+			DurationMinutes: 60,
+			RawInput:        "today work for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -3),
+			Description:     "three days ago",
+			DurationMinutes: 90,
+			RawInput:        "three days ago for 1h30m",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -10),
+			Description:     "ten days ago",
+			DurationMinutes: 120,
+			RawInput:        "ten days ago for 2h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set --last 7 flag
+	_ = rootCmd.Flags().Set("last", "7")
+	rootCmd.Run(rootCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show entries from last 7 days
+	if !strings.Contains(output, "today work") {
+		t.Errorf("Expected 'today work' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "three days ago") {
+		t.Errorf("Expected 'three days ago' in output, got: %s", output)
+	}
+	// Should NOT show entry from 10 days ago
+	if strings.Contains(output, "ten days ago") {
+		t.Errorf("Should not show 'ten days ago' (beyond 7 days), got: %s", output)
+	}
+	// Header should mention "last 7 days"
+	if !strings.Contains(output, "last 7 days") {
+		t.Errorf("Expected header to mention 'last 7 days', got: %s", output)
+	}
+}
+
+func TestDateFlag_SpecificDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for different days
+	targetDate := time.Date(2024, 6, 15, 10, 0, 0, 0, time.Local)
+	entries := []entry.Entry{
+		{
+			Timestamp:       targetDate,
+			Description:     "work on june 15",
+			DurationMinutes: 60,
+			RawInput:        "work on june 15 for 1h",
+		},
+		{
+			Timestamp:       targetDate.Add(2 * time.Hour),
+			Description:     "more work june 15",
+			DurationMinutes: 30,
+			RawInput:        "more work june 15 for 30m",
+		},
+		{
+			Timestamp:       targetDate.AddDate(0, 0, 1),
+			Description:     "work on june 16",
+			DurationMinutes: 120,
+			RawInput:        "work on june 16 for 2h",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set --date flag
+	_ = rootCmd.Flags().Set("date", "2024-06-15")
+	rootCmd.Run(rootCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show entries from June 15 only
+	if !strings.Contains(output, "work on june 15") {
+		t.Errorf("Expected 'work on june 15' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "more work june 15") {
+		t.Errorf("Expected 'more work june 15' in output, got: %s", output)
+	}
+	// Should NOT show entry from June 16
+	if strings.Contains(output, "work on june 16") {
+		t.Errorf("Should not show 'work on june 16', got: %s", output)
+	}
+}
+
+func TestFromToFlags_DateRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries for different days
+	entries := []entry.Entry{
+		{
+			Timestamp:       time.Date(2024, 6, 10, 10, 0, 0, 0, time.Local),
+			Description:     "work on june 10",
+			DurationMinutes: 60,
+			RawInput:        "work on june 10 for 1h",
+		},
+		{
+			Timestamp:       time.Date(2024, 6, 15, 10, 0, 0, 0, time.Local),
+			Description:     "work on june 15",
+			DurationMinutes: 90,
+			RawInput:        "work on june 15 for 1h30m",
+		},
+		{
+			Timestamp:       time.Date(2024, 6, 20, 10, 0, 0, 0, time.Local),
+			Description:     "work on june 20",
+			DurationMinutes: 120,
+			RawInput:        "work on june 20 for 2h",
+		},
+		{
+			Timestamp:       time.Date(2024, 6, 25, 10, 0, 0, 0, time.Local),
+			Description:     "work on june 25",
+			DurationMinutes: 30,
+			RawInput:        "work on june 25 for 30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set --from and --to flags
+	_ = rootCmd.Flags().Set("from", "2024-06-14")
+	_ = rootCmd.Flags().Set("to", "2024-06-21")
+	rootCmd.Run(rootCmd, []string{})
+
+	output := stdout.String()
+
+	// Should show entries in range only
+	if !strings.Contains(output, "work on june 15") {
+		t.Errorf("Expected 'work on june 15' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "work on june 20") {
+		t.Errorf("Expected 'work on june 20' in output, got: %s", output)
+	}
+	// Should NOT show entries outside range
+	if strings.Contains(output, "work on june 10") {
+		t.Errorf("Should not show 'work on june 10' (before range), got: %s", output)
+	}
+	if strings.Contains(output, "work on june 25") {
+		t.Errorf("Should not show 'work on june 25' (after range), got: %s", output)
+	}
+}
+
+func TestTimePeriodFlags_MutualExclusivity(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set multiple time flags
+	_ = rootCmd.Flags().Set("yesterday", "true")
+	_ = rootCmd.Flags().Set("this-week", "true")
+	rootCmd.Run(rootCmd, []string{})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called due to mutual exclusivity")
+	}
+	if !strings.Contains(stderr.String(), "mutually exclusive") {
+		t.Errorf("Expected mutual exclusivity error, got: %s", stderr.String())
+	}
+}
+
+func TestTimePeriodFlags_CannotCreateEntryWithTimeFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set time flag and try to create entry
+	_ = rootCmd.Flags().Set("yesterday", "true")
+	rootCmd.Run(rootCmd, []string{"test", "task", "for", "1h"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called - time flags cannot be used with entry creation")
+	}
+	if !strings.Contains(stderr.String(), "cannot be used when creating entries") {
+		t.Errorf("Expected error about time flags with entry creation, got: %s", stderr.String())
+	}
+}
+
+func TestDateFlag_InvalidFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set invalid date format
+	_ = rootCmd.Flags().Set("date", "invalid-date")
+	rootCmd.Run(rootCmd, []string{})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid date")
+	}
+	if !strings.Contains(stderr.String(), "Invalid --date") {
+		t.Errorf("Expected invalid date error, got: %s", stderr.String())
+	}
+}
+
+func TestFromToFlags_FromAfterTo(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set from date after to date
+	_ = rootCmd.Flags().Set("from", "2024-06-20")
+	_ = rootCmd.Flags().Set("to", "2024-06-10")
+	rootCmd.Run(rootCmd, []string{})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for from > to")
+	}
+	if !strings.Contains(stderr.String(), "is after") {
+		t.Errorf("Expected 'is after' error, got: %s", stderr.String())
 	}
 }
