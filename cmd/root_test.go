@@ -916,7 +916,7 @@ func TestThisWeek_Command(t *testing.T) {
 	wCmd.Run(wCmd, []string{})
 
 	if !strings.Contains(stdout.String(), "No entries found for this week") {
-		t.Errorf("Expected 'No entries found for this week', got: %s", stdout.String())
+		t.Errorf("Expected 'No entries found for this week' (with date range), got: %s", stdout.String())
 	}
 }
 
@@ -1140,9 +1140,9 @@ func TestThisWeek_WithTagFilter(t *testing.T) {
 		t.Errorf("Should not show 'meeting' (no tag), got: %s", output)
 	}
 
-	// Should show filter in period description
-	if !strings.Contains(output, "this week (#bugfix)") {
-		t.Errorf("Expected 'this week (#bugfix)' in output, got: %s", output)
+	// Should show filter in period description (with date range)
+	if !strings.Contains(output, "this week") || !strings.Contains(output, "(#bugfix)") {
+		t.Errorf("Expected 'this week' with date range and '(#bugfix)' in output, got: %s", output)
 	}
 
 	// Total should reflect only filtered entries (2h)
