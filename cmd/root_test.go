@@ -1181,6 +1181,140 @@ func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
 	}
 }
 
+func TestThisMonth_Command(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	mCmd.Run(mCmd, []string{})
+
+	if !strings.Contains(stdout.String(), "No entries found for this month") {
+		t.Errorf("Expected 'No entries found for this month' (with date range), got: %s", stdout.String())
+	}
+}
+
+func TestLastMonth_Command(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	lmCmd.Run(lmCmd, []string{})
+
+	if !strings.Contains(stdout.String(), "No entries found for last month") {
+		t.Errorf("Expected 'No entries found for last month', got: %s", stdout.String())
+	}
+}
+
+// Test that 'did m' shows correct date range
+func TestThisMonth_DateRangeOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	now := time.Now()
+	start := timeutil.StartOfMonth(now)
+	end := timeutil.EndOfMonth(now)
+
+	// Run command
+	mCmd.Run(mCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	endDate := end.Format("Jan 2, 2006")
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "this month"
+	if !strings.Contains(output, "this month") {
+		t.Errorf("Expected output to contain 'this month', got: %s", output)
+	}
+
+	// Verify start is the first day of the month
+	if start.Day() != 1 {
+		t.Errorf("Expected month start to be day 1, got day %d", start.Day())
+	}
+
+	// Verify end is the last day of the month
+	// Check that adding one day moves us to the next month
+	nextDay := end.AddDate(0, 0, 1)
+	if nextDay.Month() == end.Month() {
+		t.Errorf("Expected end to be last day of month, but adding one day stays in same month")
+	}
+}
+
+// Test that 'did lm' shows correct date range
+func TestLastMonth_DateRangeOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	d, stdout, _ := testDeps(storagePath)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	lastMonth := time.Now().AddDate(0, -1, 0)
+	start := timeutil.StartOfMonth(lastMonth)
+	end := timeutil.EndOfMonth(lastMonth)
+
+	// Run command
+	lmCmd.Run(lmCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	// Handle year boundary cases where start and end may be in different years
+	var endDate string
+	if start.Year() == end.Year() {
+		endDate = end.Format("Jan 2, 2006")
+	} else {
+		// Both dates should show full year if crossing year boundary
+		startDate = start.Format("Jan 2, 2006")
+		endDate = end.Format("Jan 2, 2006")
+	}
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "last month"
+	if !strings.Contains(output, "last month") {
+		t.Errorf("Expected output to contain 'last month', got: %s", output)
+	}
+
+	// Verify start is the first day of the month
+	if start.Day() != 1 {
+		t.Errorf("Expected month start to be day 1, got day %d", start.Day())
+	}
+
+	// Verify end is the last day of the month
+	// Check that adding one day moves us to the next month
+	nextDay := end.AddDate(0, 0, 1)
+	if nextDay.Month() == end.Month() {
+		t.Errorf("Expected end to be last day of month, but adding one day stays in same month")
+	}
+}
+
 func TestYesterday_WithProjectFilter(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
