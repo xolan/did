@@ -216,6 +216,7 @@ func init() {
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(undoCmd)
 	rootCmd.AddCommand(purgeCmd)
+	rootCmd.AddCommand(configCmd)
 
 	// Add persistent filter flags (apply to all commands)
 	rootCmd.PersistentFlags().String("project", "", "Filter entries by project")
