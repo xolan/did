@@ -650,9 +650,7 @@ func runGroupByProjectReport(cmd *cobra.Command) {
 	for _, group := range groups {
 		// Format project name with special handling for "(no project)"
 		projectDisplay := group.Name
-		if group.Name == "(no project)" {
-			projectDisplay = group.Name // Keep as is, no @ prefix
-		} else {
+		if group.Name != "(no project)" {
 			projectDisplay = "@" + group.Name
 		}
 
@@ -858,9 +856,7 @@ func runGroupByTagReport(cmd *cobra.Command) {
 	for _, group := range groups {
 		// Format tag name with special handling for "(no tags)"
 		tagDisplay := group.Name
-		if group.Name == "(no tags)" {
-			tagDisplay = group.Name // Keep as is, no # prefix
-		} else {
+		if group.Name != "(no tags)" {
 			tagDisplay = "#" + group.Name
 		}
 

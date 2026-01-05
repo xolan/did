@@ -3057,7 +3057,7 @@ func TestExportCSV_CorruptedEntriesWarning(t *testing.T) {
 		t.Fatalf("Failed to open storage file: %v", err)
 	}
 	_, _ = f.WriteString("{invalid json}\n")
-	f.Close()
+	_ = f.Close()
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -3125,8 +3125,8 @@ func TestExportCSV_FromFlag(t *testing.T) {
 
 	// Set --from flag to 5 days ago
 	fromDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportCSVCmd.Flags().Set("from", fromDate)
-	defer exportCSVCmd.Flags().Set("from", "")
+	_ = exportCSVCmd.Flags().Set("from", fromDate)
+	defer func() { _ = exportCSVCmd.Flags().Set("from", "") }()
 
 	stdout := &bytes.Buffer{}
 	d := &Deps{
@@ -3193,8 +3193,8 @@ func TestExportCSV_ToFlag(t *testing.T) {
 
 	// Set --to flag to 7 days ago
 	toDate := now.AddDate(0, 0, -7).Format("2006-01-02")
-	exportCSVCmd.Flags().Set("to", toDate)
-	defer exportCSVCmd.Flags().Set("to", "")
+	_ = exportCSVCmd.Flags().Set("to", toDate)
+	defer func() { _ = exportCSVCmd.Flags().Set("to", "") }()
 
 	stdout := &bytes.Buffer{}
 	d := &Deps{
@@ -3262,11 +3262,11 @@ func TestExportCSV_FromAndToFlags(t *testing.T) {
 	// Set date range: 10 days ago to 5 days ago
 	fromDate := now.AddDate(0, 0, -10).Format("2006-01-02")
 	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	exportCSVCmd.Flags().Set("from", fromDate)
-	exportCSVCmd.Flags().Set("to", toDate)
+	_ = exportCSVCmd.Flags().Set("from", fromDate)
+	_ = exportCSVCmd.Flags().Set("to", toDate)
 	defer func() {
-		exportCSVCmd.Flags().Set("from", "")
-		exportCSVCmd.Flags().Set("to", "")
+		_ = exportCSVCmd.Flags().Set("from", "")
+		_ = exportCSVCmd.Flags().Set("to", "")
 	}()
 
 	stdout := &bytes.Buffer{}
@@ -3331,8 +3331,8 @@ func TestExportCSV_LastFlag(t *testing.T) {
 	}
 
 	// Set --last flag to 7 days
-	exportCSVCmd.Flags().Set("last", "7")
-	defer exportCSVCmd.Flags().Set("last", "")
+	_ = exportCSVCmd.Flags().Set("last", "7")
+	defer func() { _ = exportCSVCmd.Flags().Set("last", "") }()
 
 	stdout := &bytes.Buffer{}
 	d := &Deps{
@@ -3404,7 +3404,7 @@ func TestExportCSV_ProjectFlag(t *testing.T) {
 	resetFilterFlags(exportCSVCmd)
 
 	// Set --project flag
-	exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
+	_ = exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
 	defer resetFilterFlags(exportCSVCmd)
 
 	stdout := &bytes.Buffer{}
@@ -3475,7 +3475,7 @@ func TestExportCSV_TagFlag(t *testing.T) {
 	resetFilterFlags(exportCSVCmd)
 
 	// Set --tag flag
-	exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
+	_ = exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
 	defer resetFilterFlags(exportCSVCmd)
 
 	stdout := &bytes.Buffer{}
@@ -3593,8 +3593,8 @@ func TestExportCSV_ProjectAndTagCombined(t *testing.T) {
 	resetFilterFlags(exportCSVCmd)
 
 	// Set both --project and --tag flags
-	exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
-	exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
+	_ = exportCSVCmd.Root().PersistentFlags().Set("project", "acme")
+	_ = exportCSVCmd.Root().PersistentFlags().Set("tag", "review")
 	defer resetFilterFlags(exportCSVCmd)
 
 	stdout := &bytes.Buffer{}

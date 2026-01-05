@@ -15,6 +15,11 @@ This is an experimental project created almost exclusively using [Claude Code](h
 
 - Log work activities with duration
 - View entries for today, yesterday, this week, or last week
+- Organize entries with projects (`@project`) and tags (`#tag`)
+- Search entries by keyword
+- Export to JSON or CSV
+- Generate reports grouped by project or tag
+- View statistics for week or month
 - Simple duration format (hours and minutes)
 - Data stored locally in JSONL format
 
@@ -100,14 +105,27 @@ did code review for 1h
 did meeting with team for 45m
 ```
 
+### Projects and Tags
+
+Organize entries with `@project` and `#tag` in descriptions:
+
+```bash
+did fix login bug @acme for 1h              # Assign to project 'acme'
+did code review #review for 30m             # Add tag 'review'
+did API work @client #backend #api for 2h   # Project with multiple tags
+```
+
 ### View entries
 
-| Command   | Description              |
-|-----------|--------------------------|
-| `did`     | List today's entries     |
-| `did y`   | List yesterday's entries |
-| `did w`   | List this week's entries |
-| `did lw`  | List last week's entries |
+| Command | Description |
+|---------|-------------|
+| `did` | List today's entries |
+| `did y` | List yesterday's entries |
+| `did w` | List this week's entries |
+| `did lw` | List last week's entries |
+| `did 2024-01-15` | List entries for a specific date |
+| `did from 2024-01-01 to 2024-01-31` | List entries for a date range |
+| `did last 7 days` | List entries from the past 7 days |
 
 **Example output:**
 
@@ -120,18 +138,132 @@ Entries for today:
 Total: 2h 30m
 ```
 
-## Duration Format
+### Filter by project or tag
 
-Durations are specified using a simple format:
+```bash
+did --project acme                # Today's entries for project 'acme'
+did @acme                         # Same as above (shorthand)
+did w --tag bugfix                # This week's entries tagged 'bugfix'
+did #bugfix                       # Today's entries tagged 'bugfix'
+did y @client #urgent             # Yesterday's entries filtered
+did --project acme --tag review   # Multiple filters
+```
+
+### Edit entries
+
+```bash
+did edit <index> --description 'new text'    # Update description
+did edit <index> --duration 2h               # Update duration
+did edit <index> --description 'text' --duration 2h    # Update both
+```
+
+### Delete and restore entries
+
+```bash
+did delete <index>      # Delete entry (with confirmation)
+did delete <index> -y   # Delete without confirmation
+did undo                # Restore most recently deleted entry
+did purge               # Permanently remove all deleted entries
+did purge -y            # Purge without confirmation
+```
+
+### Search entries
+
+```bash
+did search meeting                           # Search for 'meeting'
+did search bug --from 2024-01-01             # Search from a date
+did search review --last 7                   # Search last 7 days
+did search api --from 2024-01-01 --to 2024-01-31    # Search date range
+```
+
+### Export entries
+
+```bash
+# JSON export
+did export json                    # Export all entries
+did export json > backup.json      # Export to file
+did export json --from 2024-01-01  # From a specific date
+did export json --last 7           # Last 7 days
+did export json @acme #review      # With filters
+
+# CSV export
+did export csv                     # Export all entries
+did export csv > backup.csv        # Export to file
+did export csv --last 30           # Last 30 days
+```
+
+**Export flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--from <date>` | Start date (YYYY-MM-DD or DD/MM/YYYY) |
+| `--to <date>` | End date (YYYY-MM-DD or DD/MM/YYYY) |
+| `--last <n>` | Last N days |
+
+### Reports
+
+```bash
+# Single project/tag reports
+did report @acme                   # All entries for project 'acme'
+did report #review                 # All entries tagged 'review'
+did report @acme --last 7          # Project report for last 7 days
+
+# Grouped reports
+did report --by project            # Hours grouped by all projects
+did report --by tag                # Hours grouped by all tags
+did report --by project --last 30  # Project breakdown for last 30 days
+```
+
+**Report flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--by <type>` | Group by 'project' or 'tag' |
+| `--from <date>` | Start date |
+| `--to <date>` | End date |
+| `--last <n>` | Last N days |
+
+### Statistics
+
+```bash
+did stats           # Statistics for current week
+did stats --month   # Statistics for current month
+```
+
+### Maintenance commands
+
+```bash
+did validate              # Check storage file health
+did restore               # Restore from most recent backup
+did restore 2             # Restore from backup #2 (1-3 available)
+did config                # Display current configuration
+did config --init         # Create sample config file
+```
+
+### Global flags
+
+| Flag | Description |
+|------|-------------|
+| `--project <name>` | Filter entries by project |
+| `--tag <name>` | Filter entries by tag (can be repeated) |
+| `-h, --help` | Help for any command |
+| `-v, --version` | Show version |
+
+## Duration Format
 
 | Format | Description | Example |
 |--------|-------------|---------|
-| `Yh`   | Hours       | `2h` = 2 hours |
-| `Ym`   | Minutes     | `30m` = 30 minutes |
-
-**Valid examples:** `1h`, `2h`, `30m`, `45m`, `8h`
+| `Yh` | Hours | `2h` = 2 hours |
+| `Ym` | Minutes | `30m` = 30 minutes |
+| `YhYm` | Combined | `1h30m` = 1 hour 30 minutes |
 
 **Note:** Maximum duration per entry is 24 hours.
+
+## Date Format
+
+Dates can be specified in two formats:
+- `YYYY-MM-DD` (e.g., `2024-01-15`)
+- `DD/MM/YYYY` (e.g., `15/01/2024`)
 
 ## Data Storage
 

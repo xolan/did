@@ -21,6 +21,10 @@ cmd/
   restore.go                      # Restore from backup command
   stats.go                        # Stats command (weekly/monthly statistics)
   config.go                       # Config command (display and init configuration)
+  search.go                       # Search command (keyword search with date filters)
+  export.go                       # Export command (JSON and CSV export)
+  report.go                       # Report command (project/tag reports and grouping)
+  completion.go                   # Shell completion generation
 internal/
   config/
     config.go                     # Configuration (Config struct, TOML loading, validation)
@@ -58,31 +62,66 @@ just release-check # Validate GoReleaser configuration
 ## CLI Usage
 
 ```bash
+# Log entries
 did <description> for <duration>  # Log entry (e.g., "did feature X for 2h")
+did fix bug @acme for 1h          # Log with project
+did review #code #urgent for 30m  # Log with tags
+
+# View entries
 did                               # List today's entries
 did y                             # List yesterday's entries
 did w                             # List this week's entries
 did lw                            # List last week's entries
+did 2024-01-15                    # List entries for specific date
+did from 2024-01-01 to 2024-01-31 # List entries for date range
+did last 7 days                   # List entries from last 7 days
+
+# Filter by project/tag
+did @acme                         # Today's entries for project 'acme'
+did w #bugfix                     # This week's entries tagged 'bugfix'
+did --project acme --tag review   # Multiple filters
+
+# Edit entries
 did edit <index> --description X  # Edit entry description
 did edit <index> --duration 2h    # Edit entry duration
-did delete <index>                # Soft delete an entry (can be undone, auto-purged after 7 days)
+
+# Delete and restore
+did delete <index>                # Soft delete (can be undone, auto-purged after 7 days)
+did delete <index> -y             # Delete without confirmation
 did undo                          # Restore the most recently deleted entry
-did purge                         # Permanently remove all soft-deleted entries (with confirmation)
-did purge --yes                   # Permanently remove all soft-deleted entries (skip confirmation)
-did validate                      # Check storage file health
-did restore                       # Restore from most recent backup
-did restore <n>                   # Restore from backup #n (1-3)
-did report @project               # Show all entries for a specific project with totals
+did purge                         # Permanently remove all soft-deleted entries
+did purge -y                      # Purge without confirmation
+
+# Search
+did search <keyword>              # Search entries by keyword
+did search bug --from 2024-01-01  # Search from specific date
+did search api --last 7           # Search last 7 days
+
+# Export
+did export json                   # Export all entries as JSON
+did export json --last 7          # Export last 7 days
+did export json @acme #review     # Export with filters
+did export csv                    # Export all entries as CSV
+did export csv > backup.csv       # Export to file
+
+# Reports
+did report @project               # Show all entries for a specific project
 did report #tag                   # Show all entries with a specific tag
 did report --by project           # Show hours grouped by all projects
 did report --by tag               # Show hours grouped by all tags
-did report @project --last 7      # Project report for last 7 days
-did report --by project --from 2024-01-01 --to 2024-01-31  # Project breakdown for date range
-did stats                         # Show statistics for current week (total hours, average, comparison)
-did stats --month                 # Show statistics for current month
-did config                        # Display current configuration settings
-did config --init                 # Create a sample configuration file with all options
-did completion [bash|zsh|fish|powershell]  # Generate shell completion scripts
+did report @acme --last 7         # Project report for last 7 days
+
+# Statistics
+did stats                         # Statistics for current week
+did stats --month                 # Statistics for current month
+
+# Maintenance
+did validate                      # Check storage file health
+did restore                       # Restore from most recent backup
+did restore <n>                   # Restore from backup #n (1-3)
+did config                        # Display current configuration
+did config --init                 # Create sample config file
+did completion [bash|zsh|fish|powershell]  # Generate shell completions
 ```
 
 Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.
