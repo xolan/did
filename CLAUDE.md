@@ -72,6 +72,8 @@ did                               # List today's entries
 did y                             # List yesterday's entries
 did w                             # List this week's entries
 did lw                            # List last week's entries
+did m                             # List this month's entries
+did lm                            # List last month's entries
 did 2024-01-15                    # List entries for specific date
 did from 2024-01-01 to 2024-01-31 # List entries for date range
 did last 7 days                   # List entries from last 7 days
