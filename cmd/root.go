@@ -23,6 +23,8 @@ Usage:
   did y                                         List yesterday's entries
   did w                                         List this week's entries
   did lw                                        List last week's entries
+  did m                                         List this month's entries
+  did lm                                        List last month's entries
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
   did delete <index>                            Delete an entry (with confirmation)
@@ -208,6 +210,60 @@ var lwCmd = &cobra.Command{
 	},
 }
 
+// mCmd represents the this month command
+var mCmd = &cobra.Command{
+	Use:   "m",
+	Short: "List this month's entries",
+	Long:  `List all time tracking entries logged this month.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
+
+		// Calculate the month range
+		now := time.Now()
+		start := timeutil.StartOfMonth(now)
+		end := timeutil.EndOfMonth(now)
+
+		// Format the period with date range
+		dateRange := formatDateRangeForDisplay(start, end)
+		period := fmt.Sprintf("this month (%s)", dateRange)
+
+		// Create time range function for listEntries
+		thisMonthFunc := func() (time.Time, time.Time) {
+			return start, end
+		}
+
+		listEntries(cmd, period, thisMonthFunc)
+	},
+}
+
+// lmCmd represents the last month command
+var lmCmd = &cobra.Command{
+	Use:   "lm",
+	Short: "List last month's entries",
+	Long:  `List all time tracking entries logged last month.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
+
+		// Calculate the last month range
+		lastMonth := time.Now().AddDate(0, -1, 0)
+		start := timeutil.StartOfMonth(lastMonth)
+		end := timeutil.EndOfMonth(lastMonth)
+
+		// Format the period with date range
+		dateRange := formatDateRangeForDisplay(start, end)
+		period := fmt.Sprintf("last month (%s)", dateRange)
+
+		// Create time range function for listEntries
+		lastMonthFunc := func() (time.Time, time.Time) {
+			return start, end
+		}
+
+		listEntries(cmd, period, lastMonthFunc)
+	},
+}
+
 // editCmd represents the edit command
 var editCmd = &cobra.Command{
 	Use:   "edit <index>",
@@ -241,6 +297,8 @@ func init() {
 	rootCmd.AddCommand(yCmd)
 	rootCmd.AddCommand(wCmd)
 	rootCmd.AddCommand(lwCmd)
+	rootCmd.AddCommand(mCmd)
+	rootCmd.AddCommand(lmCmd)
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(deleteCmd)
