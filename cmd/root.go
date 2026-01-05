@@ -87,6 +87,13 @@ Statistics Commands:
   did stats                                     Show statistics for current week
   did stats --month                             Show statistics for current month
 
+Timer Mode:
+  did start <description>                       Start a timer for a task
+  did stop                                      Stop the timer and create an entry
+  did status                                    Show current timer status
+  did start fixing bug @acme                    Start timer with project
+  did start API work @client #backend #api      Start timer with project and tags
+
 Duration format: Yh (hours), Ym (minutes), or YhYm (combined)
 Examples: 2h, 30m, 1h30m
 
@@ -305,6 +312,9 @@ func init() {
 	rootCmd.AddCommand(undoCmd)
 	rootCmd.AddCommand(purgeCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(stopCmd)
+	rootCmd.AddCommand(statusCmd)
 
 	// Add persistent filter flags (apply to all commands)
 	rootCmd.PersistentFlags().String("project", "", "Filter entries by project")
