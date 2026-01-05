@@ -190,14 +190,21 @@ var lwCmd = &cobra.Command{
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		_ = parseShorthandFilters(cmd, args)
 
-		// Create time range function that uses config's week_start_day
+		// Calculate the last week range using config's week_start_day
+		lastWeek := time.Now().AddDate(0, 0, -7)
+		start := timeutil.StartOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+		end := timeutil.EndOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+
+		// Format the period with date range
+		dateRange := formatDateRangeForDisplay(start, end)
+		period := fmt.Sprintf("last week (%s)", dateRange)
+
+		// Create time range function for listEntries
 		lastWeekFunc := func() (time.Time, time.Time) {
-			lastWeek := time.Now().AddDate(0, 0, -7)
-			return timeutil.StartOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay),
-				timeutil.EndOfWeekWithConfig(lastWeek, deps.Config.WeekStartDay)
+			return start, end
 		}
 
-		listEntries(cmd, "last week", lastWeekFunc)
+		listEntries(cmd, period, lastWeekFunc)
 	},
 }
 
