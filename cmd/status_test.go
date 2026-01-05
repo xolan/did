@@ -223,9 +223,11 @@ func TestShowStatus_StartTimeFormatting_Today(t *testing.T) {
 	cleanup := setupTimerTest(t)
 	defer cleanup()
 
-	// Create a timer that started today
+	// Create a timer that started today (use fixed time to avoid midnight edge cases)
 	timerPath, _ := timer.GetTimerPath()
-	startTime := time.Now().Add(-2 * time.Hour)
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+	startTime := startOfDay.Add(-2 * time.Hour) // 10 AM today
 	state := timer.TimerState{
 		StartedAt:   startTime,
 		Description: "today's task",
