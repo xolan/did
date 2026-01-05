@@ -29,7 +29,7 @@ build:
 # Build and install to ~/.local/bin/
 install: build
     mkdir -p ~/.local/bin
-    cp dist/did ~/.local/bin/
+    install --mode +x dist/did ~/.local/bin/
 
 # Build release artifacts with GoReleaser (local snapshot, no publish)
 release:

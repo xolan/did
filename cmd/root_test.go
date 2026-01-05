@@ -2299,8 +2299,8 @@ func TestCreateEntry_WithProject(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
-	if entries[0].Description != "fix bug" {
-		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	if entries[0].Description != "fix bug @acme" {
+		t.Errorf("Expected description 'fix bug @acme', got: %s", entries[0].Description)
 	}
 	if entries[0].Project != "acme" {
 		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
@@ -2349,8 +2349,8 @@ func TestCreateEntry_WithTags(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
-	if entries[0].Description != "fix bug" {
-		t.Errorf("Expected description 'fix bug', got: %s", entries[0].Description)
+	if entries[0].Description != "fix bug #bugfix #urgent" {
+		t.Errorf("Expected description 'fix bug #bugfix #urgent', got: %s", entries[0].Description)
 	}
 	if entries[0].Project != "" {
 		t.Errorf("Expected empty project, got: %s", entries[0].Project)
@@ -2406,8 +2406,8 @@ func TestCreateEntry_WithProjectAndTags(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
-	if entries[0].Description != "implement feature" {
-		t.Errorf("Expected description 'implement feature', got: %s", entries[0].Description)
+	if entries[0].Description != "implement feature @clientco #feature #priority" {
+		t.Errorf("Expected description 'implement feature @clientco #feature #priority', got: %s", entries[0].Description)
 	}
 	if entries[0].Project != "clientco" {
 		t.Errorf("Expected project 'clientco', got: %s", entries[0].Project)
@@ -2498,8 +2498,8 @@ func TestCreateEntry_VerifyJSONLStorage(t *testing.T) {
 		t.Errorf("Expected JSON to contain tags field, got: %s", jsonStr)
 	}
 	// Verify description is clean (without @project and #tags)
-	if !strings.Contains(jsonStr, `"description":"review code"`) {
-		t.Errorf("Expected JSON to contain clean description, got: %s", jsonStr)
+	if !strings.Contains(jsonStr, `"description":"review code @acme #code-review"`) {
+		t.Errorf("Expected JSON to contain description with project/tags, got: %s", jsonStr)
 	}
 }
 
@@ -2552,9 +2552,9 @@ func TestCreateEntry_ProjectAndTagsInMiddle(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
-	// Description should be cleaned of @project and #tags
-	if entries[0].Description != "fix bug in login" {
-		t.Errorf("Expected description 'fix bug in login', got: %s", entries[0].Description)
+	// Description should preserve @project and #tags in original positions
+	if entries[0].Description != "fix @acme bug #bugfix in login" {
+		t.Errorf("Expected description 'fix @acme bug #bugfix in login', got: %s", entries[0].Description)
 	}
 	if entries[0].Project != "acme" {
 		t.Errorf("Expected project 'acme', got: %s", entries[0].Project)
@@ -3452,49 +3452,49 @@ func TestParseShorthandFilters(t *testing.T) {
 			args:              []string{"@acme"},
 			expectedProject:   "acme",
 			expectedTags:      []string{},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"@acme"},
 		},
 		{
 			name:              "single #tag",
 			args:              []string{"#bugfix"},
 			expectedProject:   "",
 			expectedTags:      []string{"bugfix"},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"#bugfix"},
 		},
 		{
 			name:              "multiple #tags",
 			args:              []string{"#bugfix", "#urgent"},
 			expectedProject:   "",
 			expectedTags:      []string{"bugfix", "urgent"},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"#bugfix", "#urgent"},
 		},
 		{
 			name:              "@project and #tag",
 			args:              []string{"@acme", "#bugfix"},
 			expectedProject:   "acme",
 			expectedTags:      []string{"bugfix"},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"@acme", "#bugfix"},
 		},
 		{
 			name:              "@project, multiple #tags",
 			args:              []string{"@client", "#urgent", "#backend"},
 			expectedProject:   "client",
 			expectedTags:      []string{"urgent", "backend"},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"@client", "#urgent", "#backend"},
 		},
 		{
 			name:              "shorthand with non-shorthand args",
 			args:              []string{"@acme", "y"},
 			expectedProject:   "acme",
 			expectedTags:      []string{},
-			expectedRemaining: []string{"y"},
+			expectedRemaining: []string{"@acme", "y"},
 		},
 		{
 			name:              "mixed order",
 			args:              []string{"y", "@client", "#urgent"},
 			expectedProject:   "client",
 			expectedTags:      []string{"urgent"},
-			expectedRemaining: []string{"y"},
+			expectedRemaining: []string{"y", "@client", "#urgent"},
 		},
 		{
 			name:              "non-shorthand only",
@@ -3508,21 +3508,21 @@ func TestParseShorthandFilters(t *testing.T) {
 			args:              []string{"@"},
 			expectedProject:   "",
 			expectedTags:      []string{},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"@"},
 		},
 		{
 			name:              "empty # prefix",
 			args:              []string{"#"},
 			expectedProject:   "",
 			expectedTags:      []string{},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"#"},
 		},
 		{
 			name:              "multiple @projects (last wins)",
 			args:              []string{"@project1", "@project2"},
 			expectedProject:   "project2",
 			expectedTags:      []string{},
-			expectedRemaining: []string{},
+			expectedRemaining: []string{"@project1", "@project2"},
 		},
 	}
 
@@ -3592,9 +3592,9 @@ func TestParseShorthandFilters_PreservesExistingFlags(t *testing.T) {
 		}
 	}
 
-	// Check remaining args
-	if len(remaining) != 1 || remaining[0] != "y" {
-		t.Errorf("Expected remaining args ['y'], got %v", remaining)
+	// Check remaining args - all args are returned unchanged
+	if len(remaining) != 2 || remaining[0] != "#new" || remaining[1] != "y" {
+		t.Errorf("Expected remaining args ['#new', 'y'], got %v", remaining)
 	}
 }
 

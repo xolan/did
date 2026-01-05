@@ -214,6 +214,16 @@ func handleTimePeriodFlags(cmd *cobra.Command, args []string) bool {
 
 	// If no time period flags, return false to continue normal processing
 	if count == 0 {
+		// Check if this looks like shorthand filters only (no 'for' keyword)
+		// In this case, treat as listing command
+		if len(args) > 0 {
+			rawInput := strings.Join(args, " ")
+			if !strings.Contains(strings.ToLower(rawInput), " for ") {
+				// No 'for' keyword - likely shorthand filters for listing
+				listEntries(cmd, "today", timeutil.Today)
+				return true
+			}
+		}
 		return false
 	}
 
@@ -364,32 +374,24 @@ func Execute() error {
 }
 
 // parseShorthandFilters parses @project and #tag shorthand syntax from args.
-// It extracts shorthand filters, sets the corresponding flags, and returns the remaining args.
-// Example: ["@acme", "#bugfix"] -> flags set, returns []
+// It sets the corresponding flags for filtering, but does NOT modify the args
+// so that project/tags can be parsed later for entry creation.
+// Example: ["@acme", "#bugfix"] -> flags set, args returned unchanged
 func parseShorthandFilters(cmd *cobra.Command, args []string) []string {
-	var remainingArgs []string
-
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "@") {
-			// Extract project (remove @ prefix)
 			project := strings.TrimPrefix(arg, "@")
 			if project != "" {
 				_ = cmd.Root().PersistentFlags().Set("project", project)
 			}
 		} else if strings.HasPrefix(arg, "#") {
-			// Extract tag (remove # prefix)
 			tag := strings.TrimPrefix(arg, "#")
 			if tag != "" {
-				// cobra StringSlice flags append when Set is called multiple times
 				_ = cmd.Root().PersistentFlags().Set("tag", tag)
 			}
-		} else {
-			// Not a shorthand filter, keep in remaining args
-			remainingArgs = append(remainingArgs, arg)
 		}
 	}
-
-	return remainingArgs
+	return args
 }
 
 // createEntry parses arguments and creates a new time tracking entry
@@ -440,7 +442,7 @@ func createEntry(args []string) {
 	// Create the entry
 	e := entry.Entry{
 		Timestamp:       time.Now(),
-		Description:     cleanDesc,
+		Description:     description,
 		DurationMinutes: minutes,
 		RawInput:        rawInput,
 		Project:         project,

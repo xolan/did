@@ -962,8 +962,9 @@ func TestIntegration_RootCommandWithShorthandFilters_Today(t *testing.T) {
 	// Simulate: did @client #urgent
 	// Parse shorthand filters and execute root command
 	args := parseShorthandFilters(rootCmd, []string{"@client", "#urgent"})
-	if len(args) != 0 {
-		t.Errorf("Expected no remaining args after parsing filters, got: %v", args)
+	// Args are returned unchanged (for entry creation parsing), but flags are set for filtering
+	if len(args) != 2 {
+		t.Errorf("Expected 2 remaining args, got: %v", args)
 	}
 
 	// Execute the root command (which lists today's entries)
