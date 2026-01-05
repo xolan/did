@@ -40,11 +40,11 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestLoad_ValidConfig(t *testing.T) {
 	tests := []struct {
-		name               string
-		configContent      string
-		expectedWeekStart  string
-		expectedTimezone   string
-		expectedOutputFmt  string
+		name              string
+		configContent     string
+		expectedWeekStart string
+		expectedTimezone  string
+		expectedOutputFmt string
 	}{
 		{
 			name: "all fields set",
@@ -526,29 +526,29 @@ func TestLoad_PartialConfig(t *testing.T) {
 	defaultCfg := DefaultConfig()
 
 	tests := []struct {
-		name               string
-		configContent      string
-		expectedWeekStart  string
-		expectedTimezone   string
-		expectedOutputFmt  string
+		name              string
+		configContent     string
+		expectedWeekStart string
+		expectedTimezone  string
+		expectedOutputFmt string
 	}{
 		{
-			name: "only week_start_day",
-			configContent: `week_start_day = "sunday"`,
+			name:              "only week_start_day",
+			configContent:     `week_start_day = "sunday"`,
 			expectedWeekStart: "sunday",
 			expectedTimezone:  defaultCfg.Timezone, // Should merge with default
 			expectedOutputFmt: defaultCfg.DefaultOutputFormat,
 		},
 		{
-			name: "only timezone",
-			configContent: `timezone = "America/New_York"`,
+			name:              "only timezone",
+			configContent:     `timezone = "America/New_York"`,
 			expectedWeekStart: defaultCfg.WeekStartDay, // Should merge with default
 			expectedTimezone:  "America/New_York",
 			expectedOutputFmt: defaultCfg.DefaultOutputFormat,
 		},
 		{
-			name: "only output format",
-			configContent: `default_output_format = "json"`,
+			name:              "only output format",
+			configContent:     `default_output_format = "json"`,
 			expectedWeekStart: defaultCfg.WeekStartDay, // Should merge with default
 			expectedTimezone:  defaultCfg.Timezone,
 			expectedOutputFmt: "json",

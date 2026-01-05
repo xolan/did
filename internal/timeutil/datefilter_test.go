@@ -1033,52 +1033,52 @@ func TestStartOfWeekWithConfig_MondayEdgeCases(t *testing.T) {
 
 func TestStartOfWeekWithConfig_MonthBoundary(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          time.Time
-		weekStartDay   string
-		expectedStart  time.Time
+		name            string
+		input           time.Time
+		weekStartDay    string
+		expectedStart   time.Time
 		expectedWeekday time.Weekday
 	}{
 		{
-			name:           "Feb 1 with monday start crosses to January",
-			input:          makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
-			weekStartDay:   "monday",
-			expectedStart:  makeTime(2024, time.January, 29, 0, 0, 0), // Monday Jan 29
+			name:            "Feb 1 with monday start crosses to January",
+			input:           makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
+			weekStartDay:    "monday",
+			expectedStart:   makeTime(2024, time.January, 29, 0, 0, 0), // Monday Jan 29
 			expectedWeekday: time.Monday,
 		},
 		{
-			name:           "Feb 1 with sunday start stays in February",
-			input:          makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
-			weekStartDay:   "sunday",
-			expectedStart:  makeTime(2024, time.January, 28, 0, 0, 0), // Sunday Jan 28
+			name:            "Feb 1 with sunday start stays in February",
+			input:           makeTime(2024, time.February, 1, 10, 0, 0), // Thursday Feb 1
+			weekStartDay:    "sunday",
+			expectedStart:   makeTime(2024, time.January, 28, 0, 0, 0), // Sunday Jan 28
 			expectedWeekday: time.Sunday,
 		},
 		{
-			name:           "March 3 (Sunday) with sunday start",
-			input:          makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
-			weekStartDay:   "sunday",
-			expectedStart:  makeTime(2024, time.March, 3, 0, 0, 0), // Same Sunday
+			name:            "March 3 (Sunday) with sunday start",
+			input:           makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
+			weekStartDay:    "sunday",
+			expectedStart:   makeTime(2024, time.March, 3, 0, 0, 0), // Same Sunday
 			expectedWeekday: time.Sunday,
 		},
 		{
-			name:           "March 3 (Sunday) with monday start crosses to February",
-			input:          makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
-			weekStartDay:   "monday",
-			expectedStart:  makeTime(2024, time.February, 26, 0, 0, 0), // Monday Feb 26
+			name:            "March 3 (Sunday) with monday start crosses to February",
+			input:           makeTime(2024, time.March, 3, 15, 30, 0), // Sunday March 3
+			weekStartDay:    "monday",
+			expectedStart:   makeTime(2024, time.February, 26, 0, 0, 0), // Monday Feb 26
 			expectedWeekday: time.Monday,
 		},
 		{
-			name:           "Jan 1 2024 (Monday) with monday start",
-			input:          makeTime(2024, time.January, 1, 10, 0, 0),
-			weekStartDay:   "monday",
-			expectedStart:  makeTime(2024, time.January, 1, 0, 0, 0),
+			name:            "Jan 1 2024 (Monday) with monday start",
+			input:           makeTime(2024, time.January, 1, 10, 0, 0),
+			weekStartDay:    "monday",
+			expectedStart:   makeTime(2024, time.January, 1, 0, 0, 0),
 			expectedWeekday: time.Monday,
 		},
 		{
-			name:           "Jan 1 2024 (Monday) with sunday start crosses to previous year",
-			input:          makeTime(2024, time.January, 1, 10, 0, 0),
-			weekStartDay:   "sunday",
-			expectedStart:  makeTime(2023, time.December, 31, 0, 0, 0), // Sunday Dec 31, 2023
+			name:            "Jan 1 2024 (Monday) with sunday start crosses to previous year",
+			input:           makeTime(2024, time.January, 1, 10, 0, 0),
+			weekStartDay:    "sunday",
+			expectedStart:   makeTime(2023, time.December, 31, 0, 0, 0), // Sunday Dec 31, 2023
 			expectedWeekday: time.Sunday,
 		},
 	}
