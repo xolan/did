@@ -4421,6 +4421,59 @@ func TestFromToFlags_FromAfterTo(t *testing.T) {
 	}
 }
 
+func TestFromFlag_InvalidFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set invalid from date
+	_ = rootCmd.Flags().Set("from", "not-a-date")
+	rootCmd.Run(rootCmd, []string{})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid from date")
+	}
+	if !strings.Contains(stderr.String(), "Invalid --from date") {
+		t.Errorf("Expected invalid from date error, got: %s", stderr.String())
+	}
+}
+
+func TestToFlag_InvalidFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	d, _, stderr := testDeps(storagePath)
+	d.Exit = func(code int) { exitCalled = true }
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Reset flags
+	resetTimePeriodFlags(rootCmd)
+	resetFilterFlags(rootCmd)
+
+	// Set valid from and invalid to date
+	_ = rootCmd.Flags().Set("from", "2024-01-01")
+	_ = rootCmd.Flags().Set("to", "not-a-date")
+	rootCmd.Run(rootCmd, []string{})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid to date")
+	}
+	if !strings.Contains(stderr.String(), "Invalid --to date") {
+		t.Errorf("Expected invalid to date error, got: %s", stderr.String())
+	}
+}
+
 func TestSetVersionInfo(t *testing.T) {
 	// Test that SetVersionInfo sets the version correctly
 	SetVersionInfo("1.2.3", "abc123", "2024-01-15")
