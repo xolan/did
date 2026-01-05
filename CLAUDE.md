@@ -14,7 +14,7 @@
 ```
 main.go                           # Entry point
 cmd/
-  root.go                         # Cobra command definitions (did, y, w, lw, edit, validate)
+  root.go                         # Cobra command definitions (did, edit, validate, time period flags)
   deps.go                         # Dependency injection (Deps struct, DefaultDeps, SetDeps for testing)
   delete.go                       # Delete command (soft delete)
   undo.go                         # Undo last delete command
@@ -29,8 +29,6 @@ cmd/
   start.go                        # Start timer command
   stop.go                         # Stop timer command
   status.go                       # Show timer status command
-  last.go                         # "last N days" relative date range command
-  range.go                        # "from ... to ..." custom date range command
 internal/
   config/
     config.go                     # Configuration (Config struct, TOML loading, validation)
@@ -90,20 +88,20 @@ did status                        # Show current timer status and elapsed time
 did stop                          # Stop timer and create entry with calculated duration
 did start <description> --force   # Override existing timer if one is already running
 
-# View entries
+# View entries (time period flags are mutually exclusive)
 did                               # List today's entries
-did y                             # List yesterday's entries
-did w                             # List this week's entries
-did lw                            # List last week's entries
-did m                             # List this month's entries
-did lm                            # List last month's entries
-did 2024-01-15                    # List entries for specific date
-did from 2024-01-01 to 2024-01-31 # List entries for date range
-did last 7 days                   # List entries from last 7 days
+did -y                            # List yesterday's entries
+did -w                            # List this week's entries
+did --prev-week                   # List previous week's entries
+did -m                            # List this month's entries
+did --prev-month                  # List previous month's entries
+did -d 2024-01-15                 # List entries for specific date
+did --from 2024-01-01 --to 2024-01-31 # List entries for date range
+did -l 7                          # List entries from last 7 days
 
 # Filter by project/tag
 did @acme                         # Today's entries for project 'acme'
-did w #bugfix                     # This week's entries tagged 'bugfix'
+did -w #bugfix                    # This week's entries tagged 'bugfix'
 did --project acme --tag review   # Multiple filters
 
 # Edit entries
@@ -194,7 +192,7 @@ did config  # Shows current settings and config file location
 
 ### Configuration Options
 
-**`week_start_day`** - Which day starts the week (affects `did w`, `did lw`, and `did stats`)
+**`week_start_day`** - Which day starts the week (affects `did -w`, `did --prev-week`, and `did stats`)
 - Valid values: `"monday"` or `"sunday"`
 - Default: `"monday"` (ISO 8601 standard)
 - Example: `week_start_day = "sunday"` for US convention

@@ -1077,14 +1077,14 @@ func TestIntegration_WeekCommandWithProjectAndTagFilters(t *testing.T) {
 	defer ResetDeps()
 
 	// Reset filters first
-	resetFilterFlags(wCmd)
+	resetFilterFlags(rootCmd)
 
 	// Set filters: --project acme --tag review
-	_ = wCmd.Root().PersistentFlags().Set("project", "acme")
-	_ = wCmd.Root().PersistentFlags().Set("tag", "review")
+	_ = rootCmd.PersistentFlags().Set("project", "acme")
+	_ = rootCmd.PersistentFlags().Set("tag", "review")
 
 	// Execute the week command
-	listEntries(wCmd, "this week", timeutil.ThisWeek)
+	listEntries(rootCmd, "this week", timeutil.ThisWeek)
 
 	output := stdout.String()
 	// Should find 2 entries: this week AND @acme AND #review
@@ -1117,7 +1117,7 @@ func TestIntegration_WeekCommandWithProjectAndTagFilters(t *testing.T) {
 	}
 
 	// Clean up
-	resetFilterFlags(wCmd)
+	resetFilterFlags(rootCmd)
 }
 
 func TestIntegration_SearchWithProjectInKeyword(t *testing.T) {

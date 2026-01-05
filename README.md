@@ -153,12 +153,28 @@ did stop                                    # Creates entry with calculated dura
 | Command | Description |
 |---------|-------------|
 | `did` | List today's entries |
-| `did y` | List yesterday's entries |
-| `did w` | List this week's entries |
-| `did lw` | List last week's entries |
-| `did 2024-01-15` | List entries for a specific date |
-| `did from 2024-01-01 to 2024-01-31` | List entries for a date range |
-| `did last 7 days` | List entries from the past 7 days |
+| `did -y` | List yesterday's entries |
+| `did -w` | List this week's entries |
+| `did --prev-week` | List previous week's entries |
+| `did -m` | List this month's entries |
+| `did --prev-month` | List previous month's entries |
+| `did -d 2024-01-15` | List entries for a specific date |
+| `did --from 2024-01-01 --to 2024-01-31` | List entries for a date range |
+| `did -l 7` | List entries from the past 7 days |
+
+**Time period flags (mutually exclusive):**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--yesterday` | `-y` | Yesterday's entries |
+| `--this-week` | `-w` | Current week's entries |
+| `--prev-week` | | Previous week's entries |
+| `--this-month` | `-m` | Current month's entries |
+| `--prev-month` | | Previous month's entries |
+| `--last <n>` | `-l` | Last N days |
+| `--date <date>` | `-d` | Specific date |
+| `--from <date>` | | Start of date range |
+| `--to <date>` | | End of date range |
 
 **Example output:**
 
@@ -176,10 +192,11 @@ Total: 2h 30m
 ```bash
 did --project acme                # Today's entries for project 'acme'
 did @acme                         # Same as above (shorthand)
-did w --tag bugfix                # This week's entries tagged 'bugfix'
+did -w --tag bugfix               # This week's entries tagged 'bugfix'
 did #bugfix                       # Today's entries tagged 'bugfix'
-did y @client #urgent             # Yesterday's entries filtered
+did -y @client #urgent            # Yesterday's entries filtered
 did --project acme --tag review   # Multiple filters
+did -l 30 @acme                   # Last 30 days for project 'acme'
 ```
 
 ### Edit entries
