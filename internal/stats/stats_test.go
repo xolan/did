@@ -884,9 +884,10 @@ func TestCalculateTagBreakdown_MultipleTagsPerEntry(t *testing.T) {
 	// backend: 120 (from first) = 120
 	var developmentBreakdown, backendBreakdown *TagBreakdown
 	for i := range breakdown {
-		if breakdown[i].Tag == "development" {
+		switch breakdown[i].Tag {
+		case "development":
 			developmentBreakdown = &breakdown[i]
-		} else if breakdown[i].Tag == "backend" {
+		case "backend":
 			backendBreakdown = &breakdown[i]
 		}
 	}

@@ -63,11 +63,12 @@ func purgeDeleted() {
 	}
 
 	// Show success message with count
-	if count == 0 {
+	switch count {
+	case 0:
 		_, _ = fmt.Fprintln(deps.Stdout, "No deleted entries to purge")
-	} else if count == 1 {
+	case 1:
 		_, _ = fmt.Fprintln(deps.Stdout, "Purged 1 entry")
-	} else {
+	default:
 		_, _ = fmt.Fprintf(deps.Stdout, "Purged %d entries\n", count)
 	}
 }
