@@ -25,6 +25,9 @@ cmd/
   export.go                       # Export command (JSON and CSV export)
   report.go                       # Report command (project/tag reports and grouping)
   completion.go                   # Shell completion generation
+  start.go                        # Start timer command
+  stop.go                         # Stop timer command
+  status.go                       # Show timer status command
 internal/
   config/
     config.go                     # Configuration (Config struct, TOML loading, validation)
@@ -44,6 +47,9 @@ internal/
   timeutil/
     datefilter.go                 # Date range utilities (Today, Yesterday, ThisWeek, LastWeek, ThisMonth, LastMonth)
     datefilter_test.go
+  timer/
+    timer.go                      # Timer state management (TimerState, SaveTimerState, LoadTimerState, ClearTimerState)
+    timer_test.go
 ```
 
 ## Commands
@@ -66,6 +72,14 @@ just release-check # Validate GoReleaser configuration
 did <description> for <duration>  # Log entry (e.g., "did feature X for 2h")
 did fix bug @acme for 1h          # Log with project
 did review #code #urgent for 30m  # Log with tags
+
+# Timer Mode (alternative workflow)
+did start <description>           # Start a timer (e.g., "did start fixing auth bug")
+did start code review @acme       # Start timer with project
+did start API work @client #backend  # Start timer with project and tags
+did status                        # Show current timer status and elapsed time
+did stop                          # Stop timer and create entry with calculated duration
+did start <description> --force   # Override existing timer if one is already running
 
 # View entries
 did                               # List today's entries
@@ -128,9 +142,22 @@ did completion [bash|zsh|fish|powershell]  # Generate shell completions
 
 Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.
 
+**Timer Mode Notes:**
+- Timer duration is automatically calculated when you stop the timer
+- Duration is rounded to the nearest minute with a minimum of 1 minute
+- Timer state persists across terminal sessions
+- Original `did X for Y` syntax continues to work unchanged
+
 ## Data Storage
 
 Entries stored in JSONL format at `~/.config/did/entries.jsonl` (Linux), uses `os.UserConfigDir()` for cross-platform support.
+
+**Timer State:**
+- Active timer state stored in `~/.config/did/timer.json`
+- Timer state persists across terminal sessions (closing terminal doesn't lose your tracking)
+- Timer stores: start time, description, project, and tags
+- Warning shown when starting a new timer while one is already running (use `--force` to override)
+- Timer file is automatically removed when timer is stopped
 
 **Soft Delete Behavior:**
 - Deleted entries are marked with a `deleted_at` timestamp rather than removed
