@@ -468,8 +468,8 @@ func createEntry(args []string) {
 		return
 	}
 
-	// Display success message with optional project and tags
-	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", formatEntryForLog(cleanDesc, project, tags), formatDuration(minutes))
+	// Display success message
+	_, _ = fmt.Fprintf(deps.Stdout, "Logged: %s (%s)\n", description, formatDuration(minutes))
 }
 
 // listEntries reads and displays entries filtered by the given time range.
