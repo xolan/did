@@ -208,6 +208,33 @@ var lwCmd = &cobra.Command{
 	},
 }
 
+// mCmd represents the this month command
+var mCmd = &cobra.Command{
+	Use:   "m",
+	Short: "List this month's entries",
+	Long:  `List all time tracking entries logged this month.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Parse shorthand filters (@project, #tag) and remove them from args
+		_ = parseShorthandFilters(cmd, args)
+
+		// Calculate the month range
+		now := time.Now()
+		start := timeutil.StartOfMonth(now)
+		end := timeutil.EndOfMonth(now)
+
+		// Format the period with date range
+		dateRange := formatDateRangeForDisplay(start, end)
+		period := fmt.Sprintf("this month (%s)", dateRange)
+
+		// Create time range function for listEntries
+		thisMonthFunc := func() (time.Time, time.Time) {
+			return start, end
+		}
+
+		listEntries(cmd, period, thisMonthFunc)
+	},
+}
+
 // editCmd represents the edit command
 var editCmd = &cobra.Command{
 	Use:   "edit <index>",
@@ -241,6 +268,7 @@ func init() {
 	rootCmd.AddCommand(yCmd)
 	rootCmd.AddCommand(wCmd)
 	rootCmd.AddCommand(lwCmd)
+	rootCmd.AddCommand(mCmd)
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(deleteCmd)
