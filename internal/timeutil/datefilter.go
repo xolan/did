@@ -27,6 +27,27 @@ func EndOfWeek(t time.Time) time.Time {
 	return StartOfWeek(t).AddDate(0, 0, 7).Add(-time.Nanosecond)
 }
 
+// StartOfWeekWithConfig returns the start of week (00:00:00) based on the configured week start day
+// weekStartDay should be "monday" or "sunday"
+// For monday: returns Monday 00:00:00 of the week containing the given time (ISO standard)
+// For sunday: returns Sunday 00:00:00 of the week containing the given time
+func StartOfWeekWithConfig(t time.Time, weekStartDay string) time.Time {
+	if weekStartDay == "sunday" {
+		weekday := int(t.Weekday()) // Sunday = 0, Monday = 1, ..., Saturday = 6
+		return StartOfDay(t).AddDate(0, 0, -weekday)
+	}
+	// Default to monday (ISO standard)
+	return StartOfWeek(t)
+}
+
+// EndOfWeekWithConfig returns the end of week (23:59:59.999999999) based on the configured week start day
+// weekStartDay should be "monday" or "sunday"
+// For monday: returns Sunday 23:59:59.999999999 of the week
+// For sunday: returns Saturday 23:59:59.999999999 of the week
+func EndOfWeekWithConfig(t time.Time, weekStartDay string) time.Time {
+	return StartOfWeekWithConfig(t, weekStartDay).AddDate(0, 0, 7).Add(-time.Nanosecond)
+}
+
 // Today returns the start and end times for today
 func Today() (start, end time.Time) {
 	now := time.Now()
