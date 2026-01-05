@@ -527,7 +527,7 @@ func TestShowStatus_LoadTimerStateError(t *testing.T) {
 
 	// Create a corrupted timer file
 	timerPath, _ := timer.GetTimerPath()
-	os.WriteFile(timerPath, []byte("not valid json"), 0644)
+	_ = os.WriteFile(timerPath, []byte("not valid json"), 0644)
 
 	exitCalled := false
 	stderr := &bytes.Buffer{}

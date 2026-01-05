@@ -4579,8 +4579,8 @@ func TestValidateConfigOnStartup_InvalidConfig(t *testing.T) {
 
 	// Create an invalid config file
 	configPath := filepath.Join(tmpDir, "did", "config.toml")
-	os.MkdirAll(filepath.Dir(configPath), 0755)
-	os.WriteFile(configPath, []byte(`week_start_day = "invalid"`), 0644)
+	_ = os.MkdirAll(filepath.Dir(configPath), 0755)
+	_ = os.WriteFile(configPath, []byte(`week_start_day = "invalid"`), 0644)
 
 	result := ValidateConfigOnStartup()
 	if result {

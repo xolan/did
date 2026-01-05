@@ -571,7 +571,7 @@ func TestStopTimer_LoadTimerStateError(t *testing.T) {
 
 	// Create a corrupted timer file
 	timerPath, _ := timer.GetTimerPath()
-	os.WriteFile(timerPath, []byte("not valid json"), 0644)
+	_ = os.WriteFile(timerPath, []byte("not valid json"), 0644)
 
 	exitCalled := false
 	stderr := &bytes.Buffer{}
@@ -610,7 +610,7 @@ func TestStopTimer_StoragePathError(t *testing.T) {
 		StartedAt:   time.Now().Add(-30 * time.Minute),
 		Description: "test task",
 	}
-	timer.SaveTimerState(timerPath, state)
+	_ = timer.SaveTimerState(timerPath, state)
 
 	exitCalled := false
 	stderr := &bytes.Buffer{}
@@ -649,7 +649,7 @@ func TestStopTimer_AppendEntryError(t *testing.T) {
 		StartedAt:   time.Now().Add(-30 * time.Minute),
 		Description: "test task",
 	}
-	timer.SaveTimerState(timerPath, state)
+	_ = timer.SaveTimerState(timerPath, state)
 
 	// Use a storage path that will fail (directory doesn't exist)
 	badStoragePath := "/nonexistent/path/to/entries.jsonl"
@@ -694,7 +694,7 @@ func TestStopTimer_ClearTimerStateWarning(t *testing.T) {
 		StartedAt:   time.Now().Add(-30 * time.Minute),
 		Description: "test task",
 	}
-	timer.SaveTimerState(timerPath, state)
+	_ = timer.SaveTimerState(timerPath, state)
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

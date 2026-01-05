@@ -490,7 +490,7 @@ func TestStartTimer_IsTimerRunningError(t *testing.T) {
 
 	// Create a corrupted timer file that will cause IsTimerRunning to fail
 	timerPath, _ := timer.GetTimerPath()
-	os.WriteFile(timerPath, []byte("not valid json"), 0644)
+	_ = os.WriteFile(timerPath, []byte("not valid json"), 0644)
 
 	exitCalled := false
 	stderr := &bytes.Buffer{}

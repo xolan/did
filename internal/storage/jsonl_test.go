@@ -1998,11 +1998,11 @@ func TestSoftDeleteEntry_WriteError(t *testing.T) {
 		Description:     "test entry",
 		DurationMinutes: 30,
 	}
-	AppendEntry(tmpFile, e)
+	_ = AppendEntry(tmpFile, e)
 
 	// Make the file read-only
-	os.Chmod(tmpFile, 0444)
-	defer os.Chmod(tmpFile, 0644)
+	_ = os.Chmod(tmpFile, 0444)
+	defer func() { _ = os.Chmod(tmpFile, 0644) }()
 
 	_, err := SoftDeleteEntry(tmpFile, 0)
 	if err == nil {
@@ -2022,11 +2022,11 @@ func TestRestoreEntry_WriteError(t *testing.T) {
 		DurationMinutes: 30,
 		DeletedAt:       &now,
 	}
-	AppendEntry(tmpFile, e)
+	_ = AppendEntry(tmpFile, e)
 
 	// Make the file read-only
-	os.Chmod(tmpFile, 0444)
-	defer os.Chmod(tmpFile, 0644)
+	_ = os.Chmod(tmpFile, 0444)
+	defer func() { _ = os.Chmod(tmpFile, 0644) }()
 
 	_, err := RestoreEntry(tmpFile, 0)
 	if err == nil {
@@ -2046,11 +2046,11 @@ func TestPurgeDeletedEntries_WriteError(t *testing.T) {
 		DurationMinutes: 30,
 		DeletedAt:       &now,
 	}
-	AppendEntry(tmpFile, e)
+	_ = AppendEntry(tmpFile, e)
 
 	// Make the file read-only
-	os.Chmod(tmpFile, 0444)
-	defer os.Chmod(tmpFile, 0644)
+	_ = os.Chmod(tmpFile, 0444)
+	defer func() { _ = os.Chmod(tmpFile, 0644) }()
 
 	_, err := PurgeDeletedEntries(tmpFile)
 	if err == nil {
@@ -2070,11 +2070,11 @@ func TestCleanupOldDeleted_WriteError(t *testing.T) {
 		DurationMinutes: 30,
 		DeletedAt:       &oldTime,
 	}
-	AppendEntry(tmpFile, e)
+	_ = AppendEntry(tmpFile, e)
 
 	// Make the file read-only
-	os.Chmod(tmpFile, 0444)
-	defer os.Chmod(tmpFile, 0644)
+	_ = os.Chmod(tmpFile, 0444)
+	defer func() { _ = os.Chmod(tmpFile, 0644) }()
 
 	_, err := CleanupOldDeleted(tmpFile)
 	if err == nil {
@@ -2092,11 +2092,11 @@ func TestUpdateEntry_TempFileError(t *testing.T) {
 		Description:     "test entry",
 		DurationMinutes: 30,
 	}
-	AppendEntry(tmpFile, e)
+	_ = AppendEntry(tmpFile, e)
 
 	// Make the directory read-only (so temp file can't be created)
-	os.Chmod(tmpDir, 0555)
-	defer os.Chmod(tmpDir, 0755)
+	_ = os.Chmod(tmpDir, 0555)
+	defer func() { _ = os.Chmod(tmpDir, 0755) }()
 
 	updatedEntry := entry.Entry{
 		Timestamp:       time.Now(),
