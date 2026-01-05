@@ -51,6 +51,29 @@ changelog:
       - Merge pull request
       - Merge branch
 
+brews:
+  - name: did
+    repository:
+      owner: xolan
+      name: homebrew-tap
+    description: "A simple CLI tool for tracking time spent on tasks"
+    homepage: "https://github.com/xolan/did"
+    license: "MIT"
+    install: |
+      bin.install "did"
+
+      # Generate and install shell completions
+      output = Utils.safe_popen_read("#{bin}/did", "completion", "bash")
+      (bash_completion/"did").write output
+
+      output = Utils.safe_popen_read("#{bin}/did", "completion", "zsh")
+      (zsh_completion/"_did").write output
+
+      output = Utils.safe_popen_read("#{bin}/did", "completion", "fish")
+      (fish_completion/"did.fish").write output
+    test: |
+      system "#{bin}/did", "--version"
+
 release:
   github:
     owner: xolan

@@ -76,6 +76,7 @@ did report @project --last 7      # Project report for last 7 days
 did report --by project --from 2024-01-01 --to 2024-01-31  # Project breakdown for date range
 did stats                         # Show statistics for current week (total hours, average, comparison)
 did stats --month                 # Show statistics for current month
+did completion [bash|zsh|fish|powershell]  # Generate shell completion scripts
 ```
 
 Duration format: `Yh` (hours), `Ym` (minutes), or `YhYm` (combined). Max 24 hours per entry.

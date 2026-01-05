@@ -30,7 +30,37 @@ This is an experimental project created almost exclusively using [Claude Code](h
 
 ## Installation
 
-### Using just (recommended)
+### Using Homebrew (recommended for macOS/Linux)
+
+```bash
+# Add the tap
+brew tap xolan/tap
+
+# Install did
+brew install did
+```
+
+Shell completions are automatically installed. To enable them:
+
+**Bash:**
+```bash
+# Add to ~/.bashrc or ~/.bash_profile
+eval "$(did completion bash)"
+```
+
+**Zsh:**
+```bash
+# Add to ~/.zshrc
+eval "$(did completion zsh)"
+```
+
+**Fish:**
+```bash
+# Add to ~/.config/fish/config.fish
+did completion fish | source
+```
+
+### Using just
 
 ```bash
 # Install dependencies and build tools
