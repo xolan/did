@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xolan/did/internal/osutil"
 )
 
 // Helper to create a temporary config file
@@ -665,4 +667,128 @@ func TestValidate_NormalizesWeekStartDay(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateSampleConfig(t *testing.T) {
+	content := GenerateSampleConfig()
+
+	// Verify content is not empty
+	if content == "" {
+		t.Error("GenerateSampleConfig() returned empty string")
+	}
+
+	// Verify it contains expected sections
+	expectedStrings := []string{
+		"# did configuration file",
+		"week_start_day",
+		"timezone",
+		"default_output_format",
+		"monday",
+		"sunday",
+		"Local",
+		"America/New_York",
+		"Europe/London",
+		"Asia/Tokyo",
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(content, expected) {
+			t.Errorf("GenerateSampleConfig() missing expected content: %q", expected)
+		}
+	}
+
+	// Verify it's commented out by default (values should be in comments)
+	if !strings.Contains(content, "# week_start_day") {
+		t.Error("GenerateSampleConfig() week_start_day should be commented out")
+	}
+	if !strings.Contains(content, "# timezone") {
+		t.Error("GenerateSampleConfig() timezone should be commented out")
+	}
+}
+
+func TestGetConfigPath_UserConfigDirError(t *testing.T) {
+	// Save original provider and ensure cleanup
+	defer osutil.ResetProvider()
+
+	// Mock UserConfigDir to return an error
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", os.ErrPermission
+		},
+	})
+
+	_, err := GetConfigPath()
+	if err == nil {
+		t.Error("GetConfigPath() should return error when UserConfigDir fails")
+	}
+}
+
+func TestGetConfigPath_MkdirAllError(t *testing.T) {
+	// Save original provider
+	original := osutil.Provider
+	defer osutil.ResetProvider()
+
+	tmpDir := t.TempDir()
+
+	// Mock MkdirAll to return an error
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return tmpDir, nil
+		},
+		mkdirAllFn: func(path string, perm os.FileMode) error {
+			return os.ErrPermission
+		},
+	})
+
+	_, err := GetConfigPath()
+	if err == nil {
+		t.Error("GetConfigPath() should return error when MkdirAll fails")
+	}
+
+	// Reset
+	osutil.Provider = original
+}
+
+func TestLoadOrDefault_StatError(t *testing.T) {
+	// Create a directory structure where we can trigger a stat error
+	// by making the parent directory unreadable
+	tmpDir := t.TempDir()
+	parentDir := filepath.Join(tmpDir, "parent")
+	if err := os.Mkdir(parentDir, 0755); err != nil {
+		t.Fatalf("Failed to create parent directory: %v", err)
+	}
+
+	configPath := filepath.Join(parentDir, "config.toml")
+
+	// Make parent directory unreadable (this will cause stat to fail with permission error)
+	if err := os.Chmod(parentDir, 0000); err != nil {
+		t.Skipf("Cannot change directory permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(parentDir, 0755) }()
+
+	// LoadOrDefault should return error (not default config) because stat fails
+	_, err := LoadOrDefault(configPath)
+	if err == nil {
+		t.Error("LoadOrDefault() should return error when os.Stat fails with permission error")
+	}
+}
+
+// mockPathProvider is a test helper for mocking osutil.PathProvider
+type mockPathProvider struct {
+	userConfigDirFn func() (string, error)
+	mkdirAllFn      func(path string, perm os.FileMode) error
+}
+
+func (m *mockPathProvider) UserConfigDir() (string, error) {
+	if m.userConfigDirFn != nil {
+		return m.userConfigDirFn()
+	}
+	return "", nil
+}
+
+func (m *mockPathProvider) MkdirAll(path string, perm os.FileMode) error {
+	if m.mkdirAllFn != nil {
+		return m.mkdirAllFn(path, perm)
+	}
+	return nil
 }

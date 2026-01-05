@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/xolan/did/internal/osutil"
 )
 
 const (
@@ -43,7 +44,7 @@ func DefaultConfig() Config {
 // Uses os.UserConfigDir() for cross-platform XDG-compliant config directory.
 // Creates the config directory if it doesn't exist.
 func GetConfigPath() (string, error) {
-	configDir, err := os.UserConfigDir()
+	configDir, err := osutil.Provider.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +52,7 @@ func GetConfigPath() (string, error) {
 	appDir := filepath.Join(configDir, AppName)
 
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {
 		return "", err
 	}
 

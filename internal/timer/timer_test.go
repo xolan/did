@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/xolan/did/internal/osutil"
 )
 
 // Helper to create a temporary timer file path
@@ -685,5 +687,64 @@ func TestSaveTimerState_DirectoryError(t *testing.T) {
 	err := SaveTimerState(invalidPath, testState)
 	if err == nil {
 		t.Error("Expected error when writing to non-existent directory")
+	}
+}
+
+// mockPathProvider is a test helper for mocking osutil.PathProvider
+type mockPathProvider struct {
+	userConfigDirFn func() (string, error)
+	mkdirAllFn      func(path string, perm os.FileMode) error
+}
+
+func (m *mockPathProvider) UserConfigDir() (string, error) {
+	if m.userConfigDirFn != nil {
+		return m.userConfigDirFn()
+	}
+	return "", nil
+}
+
+func (m *mockPathProvider) MkdirAll(path string, perm os.FileMode) error {
+	if m.mkdirAllFn != nil {
+		return m.mkdirAllFn(path, perm)
+	}
+	return nil
+}
+
+func TestGetTimerPath_UserConfigDirError(t *testing.T) {
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	// Mock UserConfigDir to return an error
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", os.ErrPermission
+		},
+	})
+
+	_, err := GetTimerPath()
+	if err == nil {
+		t.Error("GetTimerPath() should return error when UserConfigDir fails")
+	}
+}
+
+func TestGetTimerPath_MkdirAllError(t *testing.T) {
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	tmpDir := t.TempDir()
+
+	// Mock MkdirAll to return an error
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return tmpDir, nil
+		},
+		mkdirAllFn: func(path string, perm os.FileMode) error {
+			return os.ErrPermission
+		},
+	})
+
+	_, err := GetTimerPath()
+	if err == nil {
+		t.Error("GetTimerPath() should return error when MkdirAll fails")
 	}
 }

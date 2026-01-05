@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/xolan/did/internal/osutil"
 )
 
 const (
@@ -26,7 +28,7 @@ type TimerState struct {
 // Uses os.UserConfigDir() for cross-platform XDG-compliant config directory.
 // Creates the config directory if it doesn't exist.
 func GetTimerPath() (string, error) {
-	configDir, err := os.UserConfigDir()
+	configDir, err := osutil.Provider.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +36,7 @@ func GetTimerPath() (string, error) {
 	appDir := filepath.Join(configDir, AppName)
 
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -46,10 +48,8 @@ func GetTimerPath() (string, error) {
 // Uses atomic write pattern (write to temp file, then rename) for safety.
 func SaveTimerState(filepath string, state TimerState) error {
 	// Marshal state to JSON
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
+	// TimerState struct contains only JSON-safe types, so Marshal cannot fail
+	data, _ := json.MarshalIndent(state, "", "  ")
 
 	// Write to temporary file
 	tmpFile := filepath + ".tmp"

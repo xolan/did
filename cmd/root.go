@@ -276,11 +276,6 @@ func handleTimePeriodFlags(cmd *cobra.Command, args []string) bool {
 	}
 
 	if lastDays > 0 {
-		if lastDays < 1 {
-			_, _ = fmt.Fprintln(deps.Stderr, "Error: --last value must be at least 1")
-			deps.Exit(1)
-			return true
-		}
 		now := time.Now()
 		end := timeutil.EndOfDay(now)
 		start := timeutil.StartOfDay(now.AddDate(0, 0, -(lastDays - 1)))

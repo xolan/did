@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -487,5 +488,70 @@ func TestShowStatus_MultipleTagsOrdering(t *testing.T) {
 	}
 	if !strings.Contains(output, "@myproject") {
 		t.Errorf("Expected @myproject in output, got: %s", output)
+	}
+}
+
+func TestShowStatus_TimerPathError(t *testing.T) {
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+		TimerPath: func() (string, error) {
+			return "", os.ErrPermission
+		},
+		Config: DefaultDeps().Config,
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	showStatus()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when TimerPath fails")
+	}
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Failed to determine timer location") {
+		t.Errorf("Expected timer location error, got: %s", errOutput)
+	}
+}
+
+func TestShowStatus_LoadTimerStateError(t *testing.T) {
+	cleanup := setupTimerTest(t)
+	defer cleanup()
+
+	// Create a corrupted timer file
+	timerPath, _ := timer.GetTimerPath()
+	os.WriteFile(timerPath, []byte("not valid json"), 0644)
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	showStatus()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when LoadTimerState fails")
+	}
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Failed to load timer state") {
+		t.Errorf("Expected load timer state error, got: %s", errOutput)
 	}
 }

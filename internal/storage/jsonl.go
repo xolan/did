@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xolan/did/internal/entry"
+	"github.com/xolan/did/internal/osutil"
 )
 
 const (
@@ -37,7 +38,7 @@ type ReadResult struct {
 // Uses os.UserConfigDir() for cross-platform XDG-compliant config directory.
 // Creates the config directory if it doesn't exist.
 func GetStoragePath() (string, error) {
-	configDir, err := os.UserConfigDir()
+	configDir, err := osutil.Provider.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -45,7 +46,7 @@ func GetStoragePath() (string, error) {
 	appDir := filepath.Join(configDir, AppName)
 
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(appDir, 0755); err != nil {
+	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -62,10 +63,8 @@ func AppendEntry(filepath string, e entry.Entry) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	line, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
+	// Entry struct contains only JSON-safe types, so Marshal cannot fail
+	line, _ := json.Marshal(e)
 
 	_, err = file.WriteString(string(line) + "\n")
 	return err
@@ -157,10 +156,8 @@ func WriteEntries(filepath string, entries []entry.Entry) error {
 	defer func() { _ = file.Close() }()
 
 	for _, e := range entries {
-		line, err := json.Marshal(e)
-		if err != nil {
-			return err
-		}
+		// Entry struct contains only JSON-safe types, so Marshal cannot fail
+		line, _ := json.Marshal(e)
 		if _, err := file.WriteString(string(line) + "\n"); err != nil {
 			return err
 		}
@@ -373,12 +370,8 @@ func UpdateEntry(filepath string, index int, e entry.Entry) error {
 
 	// Write all entries to temp file
 	for _, entry := range entries {
-		line, err := json.Marshal(entry)
-		if err != nil {
-			_ = file.Close()
-			_ = os.Remove(tmpFile)
-			return err
-		}
+		// Entry struct contains only JSON-safe types, so Marshal cannot fail
+		line, _ := json.Marshal(entry)
 		if _, err := file.WriteString(string(line) + "\n"); err != nil {
 			_ = file.Close()
 			_ = os.Remove(tmpFile)

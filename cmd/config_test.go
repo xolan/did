@@ -624,6 +624,93 @@ func TestConfigCmd_Init(t *testing.T) {
 	}
 }
 
+// TestShowConfig_GetConfigPathError tests showing config when GetConfigPath fails
+func TestShowConfig_GetConfigPathError(t *testing.T) {
+	// Note: This is hard to test because GetConfigPath uses os.UserConfigDir which
+	// only fails when HOME is not set properly. We'll test what we can.
+	// The error path in showConfig() is from line 58-64.
+	// To test this, we'd need to mock config.GetConfigPath, but it's a package function.
+	// This test documents the expected behavior.
+	t.Skip("GetConfigPath error path requires mocking package-level function")
+}
+
+// TestInitConfig_GetConfigPathError tests initConfig when GetConfigPath fails
+func TestInitConfig_GetConfigPathError(t *testing.T) {
+	// Similar to above - requires mocking config.GetConfigPath
+	t.Skip("GetConfigPath error path requires mocking package-level function")
+}
+
+// TestInitConfig_WriteFileError tests initConfig when WriteFile fails
+func TestInitConfig_WriteFileError(t *testing.T) {
+	configPath, err := config.GetConfigPath()
+	if err != nil {
+		t.Fatalf("Failed to get config path: %v", err)
+	}
+
+	// Backup existing config if it exists
+	var backupContent []byte
+	var hadExistingConfig bool
+	if content, err := os.ReadFile(configPath); err == nil {
+		backupContent = content
+		hadExistingConfig = true
+		// Remove the config file temporarily
+		if err := os.Remove(configPath); err != nil {
+			t.Fatalf("Failed to remove existing config for test: %v", err)
+		}
+	}
+
+	// Restore config after test
+	defer func() {
+		// Restore parent directory permissions
+		parentDir := configPath[:len(configPath)-len("/config.toml")]
+		_ = os.Chmod(parentDir, 0755)
+		if hadExistingConfig {
+			_ = os.WriteFile(configPath, backupContent, 0644)
+		} else {
+			_ = os.Remove(configPath)
+		}
+	}()
+
+	// Get parent directory and make it read-only to cause WriteFile to fail
+	parentDir := configPath[:len(configPath)-len("/config.toml")]
+
+	// Create the parent directory if it doesn't exist
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		t.Fatalf("Failed to create parent dir: %v", err)
+	}
+
+	// Make parent directory read-only
+	if err := os.Chmod(parentDir, 0555); err != nil {
+		t.Fatalf("Failed to change parent dir permissions: %v", err)
+	}
+
+	exitCalled := false
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	initConfig()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when WriteFile fails")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Failed to create config file") {
+		t.Errorf("Expected stderr to contain write error, got: %s", stderrOutput)
+	}
+}
+
 // TestShowConfig_PartialConfig tests showing config with partial config file (merged with defaults)
 func TestShowConfig_PartialConfig(t *testing.T) {
 	configPath, err := config.GetConfigPath()

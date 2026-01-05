@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -333,6 +334,57 @@ func TestUndoDelete_WithProjectAndTags(t *testing.T) {
 	}
 	if !strings.Contains(output, "2h") {
 		t.Errorf("Expected duration in output, got: %s", output)
+	}
+}
+
+func TestUndoDelete_RestoreEntryError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create and delete test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test entry",
+		DurationMinutes: 60,
+		RawInput:        "test entry for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+	_, err := storage.SoftDeleteEntry(storagePath, 0)
+	if err != nil {
+		t.Fatalf("Failed to soft delete entry: %v", err)
+	}
+
+	// Make the storage file unwritable to cause RestoreEntry to fail
+	if err := os.Chmod(storagePath, 0444); err != nil {
+		t.Fatalf("Failed to change file permissions: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(storagePath, 0644)
+	}()
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	undoDelete()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when restore fails")
+	}
+	if !strings.Contains(stderr.String(), "Failed to restore entry") {
+		t.Errorf("Expected 'Failed to restore entry' error, got: %s", stderr.String())
 	}
 }
 

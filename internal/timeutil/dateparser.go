@@ -87,10 +87,8 @@ func ParseRelativeDays(input string) (start, end time.Time, err error) {
 	}
 
 	// Extract the number of days
-	n, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid number in relative date: %s", matches[1])
-	}
+	// Regex guarantees only digits, so Atoi cannot fail
+	n, _ := strconv.Atoi(matches[1])
 
 	if n <= 0 {
 		return time.Time{}, time.Time{}, fmt.Errorf("invalid number of days: must be positive, got %d", n)

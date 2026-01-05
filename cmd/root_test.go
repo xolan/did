@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/config"
 	"github.com/xolan/did/internal/entry"
+	"github.com/xolan/did/internal/osutil"
 	"github.com/xolan/did/internal/storage"
 	"github.com/xolan/did/internal/timeutil"
 )
@@ -4416,5 +4418,119 @@ func TestFromToFlags_FromAfterTo(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "is after") {
 		t.Errorf("Expected 'is after' error, got: %s", stderr.String())
+	}
+}
+
+func TestSetVersionInfo(t *testing.T) {
+	// Test that SetVersionInfo sets the version correctly
+	SetVersionInfo("1.2.3", "abc123", "2024-01-15")
+
+	if rootCmd.Version != "1.2.3" {
+		t.Errorf("Expected version '1.2.3', got '%s'", rootCmd.Version)
+	}
+
+	// Verify version template is set (contains commit and date)
+	// We can't easily check the template content, but we can verify the command has a version
+	if rootCmd.Version == "" {
+		t.Error("Version should not be empty after SetVersionInfo")
+	}
+}
+
+func TestBuildPeriodWithFilters_EmptyFilters(t *testing.T) {
+	// Test with no filters - should return period unchanged
+	result := buildPeriodWithFilters("today", "", []string{})
+	if result != "today" {
+		t.Errorf("Expected 'today', got '%s'", result)
+	}
+
+	// Test with only project
+	result = buildPeriodWithFilters("today", "acme", []string{})
+	if result != "today (@acme)" {
+		t.Errorf("Expected 'today (@acme)', got '%s'", result)
+	}
+
+	// Test with only tags
+	result = buildPeriodWithFilters("today", "", []string{"bug", "urgent"})
+	if result != "today (#bug #urgent)" {
+		t.Errorf("Expected 'today (#bug #urgent)', got '%s'", result)
+	}
+
+	// Test with both project and tags
+	result = buildPeriodWithFilters("today", "acme", []string{"bug"})
+	if result != "today (@acme #bug)" {
+		t.Errorf("Expected 'today (@acme #bug)', got '%s'", result)
+	}
+}
+
+// mockPathProvider is a test helper for mocking osutil.PathProvider
+type mockPathProvider struct {
+	userConfigDirFn func() (string, error)
+	mkdirAllFn      func(path string, perm os.FileMode) error
+}
+
+func (m *mockPathProvider) UserConfigDir() (string, error) {
+	if m.userConfigDirFn != nil {
+		return m.userConfigDirFn()
+	}
+	return "", nil
+}
+
+func (m *mockPathProvider) MkdirAll(path string, perm os.FileMode) error {
+	if m.mkdirAllFn != nil {
+		return m.mkdirAllFn(path, perm)
+	}
+	return nil
+}
+
+func TestValidateConfigOnStartup_Success(t *testing.T) {
+	// With default config path (valid), should return true
+	result := ValidateConfigOnStartup()
+	if !result {
+		t.Error("ValidateConfigOnStartup() should return true with valid/missing config")
+	}
+}
+
+func TestValidateConfigOnStartup_ConfigPathError(t *testing.T) {
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	// Mock UserConfigDir to return an error
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", errors.New("permission denied")
+		},
+	})
+
+	result := ValidateConfigOnStartup()
+	if result {
+		t.Error("ValidateConfigOnStartup() should return false when GetConfigPath fails")
+	}
+}
+
+func TestValidateConfigOnStartup_InvalidConfig(t *testing.T) {
+	// Create a temp directory with an invalid config file
+	tmpDir := t.TempDir()
+
+	// Save original provider
+	defer osutil.ResetProvider()
+
+	// Mock to use temp directory
+	osutil.SetProvider(&mockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return tmpDir, nil
+		},
+		mkdirAllFn: func(path string, perm os.FileMode) error {
+			return os.MkdirAll(path, perm)
+		},
+	})
+
+	// Create an invalid config file
+	configPath := filepath.Join(tmpDir, "did", "config.toml")
+	os.MkdirAll(filepath.Dir(configPath), 0755)
+	os.WriteFile(configPath, []byte(`week_start_day = "invalid"`), 0644)
+
+	result := ValidateConfigOnStartup()
+	if result {
+		t.Error("ValidateConfigOnStartup() should return false for invalid config file")
 	}
 }

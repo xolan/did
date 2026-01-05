@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -594,6 +595,60 @@ func TestPurgeDeleted_ConfirmationEmptyInput(t *testing.T) {
 	output := stdout.String()
 	if !strings.Contains(output, "Purge cancelled") {
 		t.Errorf("Expected 'Purge cancelled' with empty input, got: %s", output)
+	}
+}
+
+func TestPurgeDeleted_PurgeEntriesError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create and delete test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test entry",
+		DurationMinutes: 60,
+		RawInput:        "test entry for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+	_, err := storage.SoftDeleteEntry(storagePath, 0)
+	if err != nil {
+		t.Fatalf("Failed to soft delete entry: %v", err)
+	}
+
+	// Make the storage file read-only to cause PurgeDeletedEntries to fail
+	if err := os.Chmod(storagePath, 0444); err != nil {
+		t.Fatalf("Failed to change file permissions: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(storagePath, 0644)
+	}()
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	purgeYesFlag = true
+	defer func() { purgeYesFlag = false }()
+
+	purgeDeleted()
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when purge fails")
+	}
+	if !strings.Contains(stderr.String(), "Failed to purge entries") {
+		t.Errorf("Expected 'Failed to purge entries' error, got: %s", stderr.String())
 	}
 }
 

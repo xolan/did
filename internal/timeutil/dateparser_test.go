@@ -553,3 +553,41 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestParseDate_TooManyParts(t *testing.T) {
+	// Test the tooManyPartsRe case in buildDateParseError
+	tests := []struct {
+		name           string
+		input          string
+		expectedSubstr string
+	}{
+		{
+			name:           "too many hyphens",
+			input:          "2024-01-15-01",
+			expectedSubstr: "too many date parts",
+		},
+		{
+			name:           "too many slashes",
+			input:          "15/01/2024/12",
+			expectedSubstr: "too many date parts",
+		},
+		{
+			name:           "mixed separators with extra",
+			input:          "2024-01-15-",
+			expectedSubstr: "too many date parts",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseDate(tt.input)
+			if err == nil {
+				t.Fatalf("ParseDate(%q) expected error, got nil", tt.input)
+			}
+			if !containsSubstring(err.Error(), tt.expectedSubstr) {
+				t.Errorf("ParseDate(%q) error = %q, expected to contain %q",
+					tt.input, err.Error(), tt.expectedSubstr)
+			}
+		})
+	}
+}

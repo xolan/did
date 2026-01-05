@@ -14,14 +14,21 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run executes the main application logic and returns an exit code.
+// This function is separated from main() to enable testing.
+func run() int {
 	// Validate configuration before executing commands
 	// This ensures invalid config files show helpful error messages
 	if !cmd.ValidateConfigOnStartup() {
-		os.Exit(1)
+		return 1
 	}
 
 	cmd.SetVersionInfo(version, commit, date)
 	if err := cmd.Execute(); err != nil {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

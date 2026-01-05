@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -663,6 +664,59 @@ func TestGenerateCompletion_WhitespaceOnly(t *testing.T) {
 			errOutput := stderr.String()
 			if !strings.Contains(errOutput, "Unsupported shell") {
 				t.Errorf("Expected 'Unsupported shell' error for %q, got: %s", tt.shell, errOutput)
+			}
+		})
+	}
+}
+
+// failingWriter is a writer that always returns an error
+type failingWriter struct{}
+
+func (f *failingWriter) Write(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("write error")
+}
+
+// TestGenerateCompletion_WriterError tests error handling when writing completion script fails
+func TestGenerateCompletion_WriterError(t *testing.T) {
+	shells := []string{"bash", "zsh", "fish", "powershell"}
+
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			exitCalled := false
+			exitCode := 0
+			stderr := &bytes.Buffer{}
+			d := &Deps{
+				Stdout: &failingWriter{},
+				Stderr: stderr,
+				Stdin:  strings.NewReader(""),
+				Exit: func(code int) {
+					exitCalled = true
+					exitCode = code
+				},
+				StoragePath: func() (string, error) {
+					return "", nil
+				},
+			}
+			SetDeps(d)
+			defer ResetDeps()
+
+			generateCompletion(shell)
+
+			// Check that exit was called with error code
+			if !exitCalled {
+				t.Errorf("Expected exit to be called when write fails for %s", shell)
+			}
+			if exitCode != 1 {
+				t.Errorf("Expected exit code 1 for %s, got %d", shell, exitCode)
+			}
+
+			// Check error message
+			errOutput := stderr.String()
+			if !strings.Contains(errOutput, "Failed to generate") {
+				t.Errorf("Expected 'Failed to generate' error for %s, got: %s", shell, errOutput)
+			}
+			if !strings.Contains(errOutput, shell) {
+				t.Errorf("Expected error to mention shell type %s, got: %s", shell, errOutput)
 			}
 		})
 	}

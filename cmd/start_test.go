@@ -453,3 +453,104 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+func TestStartTimer_TimerPathError(t *testing.T) {
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+		TimerPath: func() (string, error) {
+			return "", os.ErrPermission
+		},
+		Config: DefaultDeps().Config,
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	startTimer([]string{"test", "task"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when TimerPath fails")
+	}
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Failed to determine timer location") {
+		t.Errorf("Expected timer location error, got: %s", errOutput)
+	}
+}
+
+func TestStartTimer_IsTimerRunningError(t *testing.T) {
+	cleanup := setupTimerTest(t)
+	defer cleanup()
+
+	// Create a corrupted timer file that will cause IsTimerRunning to fail
+	timerPath, _ := timer.GetTimerPath()
+	os.WriteFile(timerPath, []byte("not valid json"), 0644)
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+		TimerPath: timer.GetTimerPath,
+		Config:    DefaultDeps().Config,
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	startTimer([]string{"test", "task"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when IsTimerRunning fails")
+	}
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Failed to check timer status") {
+		t.Errorf("Expected check timer status error, got: %s", errOutput)
+	}
+}
+
+func TestStartTimer_SaveTimerStateError(t *testing.T) {
+	cleanup := setupTimerTest(t)
+	defer cleanup()
+
+	// Use a path that doesn't exist (directory doesn't exist)
+	badPath := "/nonexistent/path/to/timer.json"
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", nil
+		},
+		TimerPath: func() (string, error) {
+			return badPath, nil
+		},
+		Config: DefaultDeps().Config,
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	startTimer([]string{"test", "task"})
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when SaveTimerState fails")
+	}
+	errOutput := stderr.String()
+	if !strings.Contains(errOutput, "Failed to save timer state") {
+		t.Errorf("Expected save timer state error, got: %s", errOutput)
+	}
+}

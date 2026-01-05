@@ -3671,3 +3671,294 @@ func TestExportCSV_OutputCanBeRedirected(t *testing.T) {
 		t.Error("Output file should contain entry data")
 	}
 }
+
+// CSV Export Error Path Tests
+
+func TestExportCSV_StoragePathError(t *testing.T) {
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return "", fmt.Errorf("storage path error")
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for storage path error")
+	}
+	if !strings.Contains(stderr.String(), "Failed to determine storage location") {
+		t.Errorf("Expected storage path error, got: %s", stderr.String())
+	}
+}
+
+func TestExportCSV_ReadEntriesError(t *testing.T) {
+	// Use a path to a directory (not a file) to cause read error
+	tmpDir := t.TempDir()
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return tmpDir, nil // path to directory, not file
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for read entries error")
+	}
+	if !strings.Contains(stderr.String(), "Failed to read entries") {
+		t.Errorf("Expected read entries error, got: %s", stderr.String())
+	}
+}
+
+func TestExportCSV_InvalidFromDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set invalid --from date
+	if err := exportCSVCmd.Flags().Set("from", "invalid-date"); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportCSVCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid --from date")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Invalid --from date") {
+		t.Errorf("Expected 'Invalid --from date' error, got: %s", stderrOutput)
+	}
+}
+
+func TestExportCSV_InvalidToDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set invalid --to date
+	if err := exportCSVCmd.Flags().Set("to", "2024-13-45"); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportCSVCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called for invalid --to date")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Invalid --to date") {
+		t.Errorf("Expected 'Invalid --to date' error, got: %s", stderrOutput)
+	}
+}
+
+func TestExportCSV_LastWithFromError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set both --last and --from (should error)
+	if err := exportCSVCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	if err := exportCSVCmd.Flags().Set("from", "2024-01-01"); err != nil {
+		t.Fatalf("Failed to set from flag: %v", err)
+	}
+	defer func() {
+		if err := exportCSVCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+		if err := exportCSVCmd.Flags().Set("from", ""); err != nil {
+			t.Errorf("Failed to reset from flag: %v", err)
+		}
+	}()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when using --last with --from")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Cannot use --last with --from") {
+		t.Errorf("Expected error about conflicting flags, got: %s", stderrOutput)
+	}
+}
+
+func TestExportCSV_LastWithToError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set both --last and --to (should error)
+	if err := exportCSVCmd.Flags().Set("last", "7"); err != nil {
+		t.Fatalf("Failed to set last flag: %v", err)
+	}
+	if err := exportCSVCmd.Flags().Set("to", "2024-12-31"); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportCSVCmd.Flags().Set("last", "0"); err != nil {
+			t.Errorf("Failed to reset last flag: %v", err)
+		}
+		if err := exportCSVCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
+
+	exportCSV(exportCSVCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when using --last with --to")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Cannot use --last with") {
+		t.Errorf("Expected error about conflicting flags, got: %s", stderrOutput)
+	}
+}
+
+func TestExportCSV_OnlyToDateIncludesFromBeginning(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create entries
+	now := time.Now()
+	entries := []entry.Entry{
+		{
+			Timestamp:       now.AddDate(0, -6, 0), // 6 months ago (before to)
+			Description:     "Very old entry",
+			DurationMinutes: 60,
+			RawInput:        "Very old entry for 1h",
+		},
+		{
+			Timestamp:       now.AddDate(0, 0, -2), // 2 days ago (after to)
+			Description:     "Recent entry",
+			DurationMinutes: 90,
+			RawInput:        "Recent entry for 1h30m",
+		},
+	}
+
+	for _, e := range entries {
+		if err := storage.AppendEntry(storagePath, e); err != nil {
+			t.Fatalf("Failed to create test entry: %v", err)
+		}
+	}
+
+	stdout := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Set only --to flag (should include from beginning)
+	toDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	if err := exportCSVCmd.Flags().Set("to", toDate); err != nil {
+		t.Fatalf("Failed to set to flag: %v", err)
+	}
+	defer func() {
+		if err := exportCSVCmd.Flags().Set("to", ""); err != nil {
+			t.Errorf("Failed to reset to flag: %v", err)
+		}
+	}()
+
+	exportCSV(exportCSVCmd)
+
+	output := stdout.String()
+
+	// Should include old entry but not recent entry
+	if !strings.Contains(output, "Very old entry") {
+		t.Error("Should include very old entry")
+	}
+	if strings.Contains(output, "Recent entry") {
+		t.Error("Should not include recent entry after --to date")
+	}
+}
