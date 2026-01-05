@@ -23,6 +23,8 @@ Usage:
   did y                                         List yesterday's entries
   did w                                         List this week's entries
   did lw                                        List last week's entries
+  did m                                         List this month's entries
+  did lm                                        List last month's entries
   did edit <index> --description 'text'         Edit entry description
   did edit <index> --duration 2h                Edit entry duration
   did delete <index>                            Delete an entry (with confirmation)
