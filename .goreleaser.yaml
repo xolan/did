@@ -56,6 +56,9 @@ brews:
     repository:
       owner: xolan
       name: homebrew-tap
+    # Skip auto-push - requires PAT with write access to homebrew-tap
+    # Update homebrew-tap manually or set up HOMEBREW_TAP_TOKEN secret
+    skip_upload: true
     description: "A simple CLI tool for tracking time spent on tasks"
     homepage: "https://github.com/xolan/did"
     license: "MIT"
