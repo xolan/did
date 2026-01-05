@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/xolan/did/internal/config"
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/storage"
 	"github.com/xolan/did/internal/timeutil"
@@ -27,6 +28,23 @@ func testDeps(storagePath string) (*Deps, *bytes.Buffer, *bytes.Buffer) {
 		StoragePath: func() (string, error) {
 			return storagePath, nil
 		},
+		Config: config.DefaultConfig(),
+	}, stdout, stderr
+}
+
+// testDepsWithConfig creates test dependencies with a custom config and captured output
+func testDepsWithConfig(storagePath string, cfg config.Config) (*Deps, *bytes.Buffer, *bytes.Buffer) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	return &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+		Config: cfg,
 	}, stdout, stderr
 }
 
@@ -916,7 +934,7 @@ func TestThisWeek_Command(t *testing.T) {
 	wCmd.Run(wCmd, []string{})
 
 	if !strings.Contains(stdout.String(), "No entries found for this week") {
-		t.Errorf("Expected 'No entries found for this week', got: %s", stdout.String())
+		t.Errorf("Expected 'No entries found for this week' (with date range), got: %s", stdout.String())
 	}
 }
 
@@ -932,6 +950,234 @@ func TestLastWeek_Command(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "No entries found for last week") {
 		t.Errorf("Expected 'No entries found for last week', got: %s", stdout.String())
+	}
+}
+
+// Test that 'did w' shows correct date range with monday week start (default)
+func TestThisWeek_DateRangeOutput_MondayStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Use Monday week start config (default)
+	cfg := config.Config{
+		WeekStartDay:        "monday",
+		Timezone:            "Local",
+		DefaultOutputFormat: "",
+	}
+
+	d, stdout, _ := testDepsWithConfig(storagePath, cfg)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	now := time.Now()
+	start := timeutil.StartOfWeekWithConfig(now, "monday")
+	end := timeutil.EndOfWeekWithConfig(now, "monday")
+
+	// Run command
+	wCmd.Run(wCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	endDate := end.Format("Jan 2, 2006")
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "this week"
+	if !strings.Contains(output, "this week") {
+		t.Errorf("Expected output to contain 'this week', got: %s", output)
+	}
+
+	// Verify start is a Monday
+	if start.Weekday() != time.Monday {
+		t.Errorf("Expected week start to be Monday with monday config, got %s", start.Weekday())
+	}
+
+	// Verify end is a Sunday
+	if end.Weekday() != time.Sunday {
+		t.Errorf("Expected week end to be Sunday with monday config, got %s", end.Weekday())
+	}
+}
+
+// Test that 'did w' shows correct date range with sunday week start
+func TestThisWeek_DateRangeOutput_SundayStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Use Sunday week start config
+	cfg := config.Config{
+		WeekStartDay:        "sunday",
+		Timezone:            "Local",
+		DefaultOutputFormat: "",
+	}
+
+	d, stdout, _ := testDepsWithConfig(storagePath, cfg)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	now := time.Now()
+	start := timeutil.StartOfWeekWithConfig(now, "sunday")
+	end := timeutil.EndOfWeekWithConfig(now, "sunday")
+
+	// Run command
+	wCmd.Run(wCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	endDate := end.Format("Jan 2, 2006")
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "this week"
+	if !strings.Contains(output, "this week") {
+		t.Errorf("Expected output to contain 'this week', got: %s", output)
+	}
+
+	// Verify start is a Sunday
+	if start.Weekday() != time.Sunday {
+		t.Errorf("Expected week start to be Sunday with sunday config, got %s", start.Weekday())
+	}
+
+	// Verify end is a Saturday
+	if end.Weekday() != time.Saturday {
+		t.Errorf("Expected week end to be Saturday with sunday config, got %s", end.Weekday())
+	}
+}
+
+// Test that 'did lw' shows correct date range with monday week start (default)
+func TestLastWeek_DateRangeOutput_MondayStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Use Monday week start config (default)
+	cfg := config.Config{
+		WeekStartDay:        "monday",
+		Timezone:            "Local",
+		DefaultOutputFormat: "",
+	}
+
+	d, stdout, _ := testDepsWithConfig(storagePath, cfg)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	lastWeek := time.Now().AddDate(0, 0, -7)
+	start := timeutil.StartOfWeekWithConfig(lastWeek, "monday")
+	end := timeutil.EndOfWeekWithConfig(lastWeek, "monday")
+
+	// Run command
+	lwCmd.Run(lwCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	// Handle year boundary cases where start and end may be in different years
+	var endDate string
+	if start.Year() == end.Year() {
+		endDate = end.Format("Jan 2, 2006")
+	} else {
+		// Both dates should show full year if crossing year boundary
+		startDate = start.Format("Jan 2, 2006")
+		endDate = end.Format("Jan 2, 2006")
+	}
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "last week"
+	if !strings.Contains(output, "last week") {
+		t.Errorf("Expected output to contain 'last week', got: %s", output)
+	}
+
+	// Verify start is a Monday
+	if start.Weekday() != time.Monday {
+		t.Errorf("Expected week start to be Monday with monday config, got %s", start.Weekday())
+	}
+
+	// Verify end is a Sunday
+	if end.Weekday() != time.Sunday {
+		t.Errorf("Expected week end to be Sunday with monday config, got %s", end.Weekday())
+	}
+}
+
+// Test that 'did lw' shows correct date range with sunday week start
+func TestLastWeek_DateRangeOutput_SundayStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Use Sunday week start config
+	cfg := config.Config{
+		WeekStartDay:        "sunday",
+		Timezone:            "Local",
+		DefaultOutputFormat: "",
+	}
+
+	d, stdout, _ := testDepsWithConfig(storagePath, cfg)
+	SetDeps(d)
+	defer ResetDeps()
+
+	// Calculate expected date range
+	lastWeek := time.Now().AddDate(0, 0, -7)
+	start := timeutil.StartOfWeekWithConfig(lastWeek, "sunday")
+	end := timeutil.EndOfWeekWithConfig(lastWeek, "sunday")
+
+	// Run command
+	lwCmd.Run(lwCmd, []string{})
+
+	output := stdout.String()
+
+	// Verify output contains date range
+	startDate := start.Format("Jan 2")
+	// Handle year boundary cases where start and end may be in different years
+	var endDate string
+	if start.Year() == end.Year() {
+		endDate = end.Format("Jan 2, 2006")
+	} else {
+		// Both dates should show full year if crossing year boundary
+		startDate = start.Format("Jan 2, 2006")
+		endDate = end.Format("Jan 2, 2006")
+	}
+
+	if !strings.Contains(output, startDate) {
+		t.Errorf("Expected output to contain start date '%s', got: %s", startDate, output)
+	}
+	if !strings.Contains(output, endDate) {
+		t.Errorf("Expected output to contain end date '%s', got: %s", endDate, output)
+	}
+
+	// Verify the header shows "last week"
+	if !strings.Contains(output, "last week") {
+		t.Errorf("Expected output to contain 'last week', got: %s", output)
+	}
+
+	// Verify start is a Sunday
+	if start.Weekday() != time.Sunday {
+		t.Errorf("Expected week start to be Sunday with sunday config, got %s", start.Weekday())
+	}
+
+	// Verify end is a Saturday
+	if end.Weekday() != time.Saturday {
+		t.Errorf("Expected week end to be Saturday with sunday config, got %s", end.Weekday())
 	}
 }
 
@@ -1140,9 +1386,9 @@ func TestThisWeek_WithTagFilter(t *testing.T) {
 		t.Errorf("Should not show 'meeting' (no tag), got: %s", output)
 	}
 
-	// Should show filter in period description
-	if !strings.Contains(output, "this week (#bugfix)") {
-		t.Errorf("Expected 'this week (#bugfix)' in output, got: %s", output)
+	// Should show filter in period description (with date range)
+	if !strings.Contains(output, "this week") || !strings.Contains(output, "(#bugfix)") {
+		t.Errorf("Expected 'this week' with date range and '(#bugfix)' in output, got: %s", output)
 	}
 
 	// Total should reflect only filtered entries (2h)
