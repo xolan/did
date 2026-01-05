@@ -39,31 +39,23 @@ func GetBackupPathForStorage(storagePath string, n int) (string, error) {
 // It renames .bak.1 -> .bak.2, .bak.2 -> .bak.3, and deletes the oldest .bak.3
 // if it exists. This ensures only MaxBackupCount backups are kept.
 // Returns an error if any file operation fails (except for missing files, which are OK).
+// Note: storagePath must be non-empty (this is enforced by the caller CreateBackup).
 func rotateBackups(storagePath string) error {
-	// Delete the oldest backup (.bak.3) if it exists to make room
-	oldestPath, err := GetBackupPathForStorage(storagePath, MaxBackupCount)
-	if err != nil {
-		return err
+	// Helper to build backup path directly (storagePath is always non-empty here)
+	backupPath := func(n int) string {
+		return fmt.Sprintf("%s%s.%d", storagePath, BackupSuffix, n)
 	}
-	if err := os.Remove(oldestPath); err != nil && !os.IsNotExist(err) {
+
+	// Delete the oldest backup (.bak.3) if it exists to make room
+	if err := os.Remove(backupPath(MaxBackupCount)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
 	// Rotate backups from MaxBackupCount-1 down to 1
 	// This shifts .bak.2 -> .bak.3, then .bak.1 -> .bak.2
 	for i := MaxBackupCount - 1; i >= 1; i-- {
-		currentPath, err := GetBackupPathForStorage(storagePath, i)
-		if err != nil {
-			return err
-		}
-
-		nextPath, err := GetBackupPathForStorage(storagePath, i+1)
-		if err != nil {
-			return err
-		}
-
 		// Rename the file if it exists
-		if err := os.Rename(currentPath, nextPath); err != nil && !os.IsNotExist(err) {
+		if err := os.Rename(backupPath(i), backupPath(i+1)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}

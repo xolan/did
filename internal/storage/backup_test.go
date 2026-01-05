@@ -1132,33 +1132,37 @@ func TestRotateBackups_RemoveOldestError(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
-	// Create storage file and backup 3
+	// Create storage file
 	if err := os.WriteFile(storagePath, []byte("test content"), 0644); err != nil {
 		t.Fatalf("Failed to create storage file: %v", err)
 	}
+
+	// Create backup.3 as a non-empty directory (os.Remove cannot delete non-empty directories)
 	backup3Path := storagePath + ".bak.3"
-	if err := os.WriteFile(backup3Path, []byte("backup 3"), 0644); err != nil {
-		t.Fatalf("Failed to create backup 3: %v", err)
+	if err := os.MkdirAll(backup3Path, 0755); err != nil {
+		t.Fatalf("Failed to create backup 3 directory: %v", err)
+	}
+	// Add a file inside to make it non-empty
+	if err := os.WriteFile(filepath.Join(backup3Path, "dummy"), []byte("data"), 0644); err != nil {
+		t.Fatalf("Failed to create file inside backup 3 directory: %v", err)
 	}
 
-	// Make backup 3 undeletable by making it a directory with content
-	// Actually, easier to just make parent dir read-only, but that affects other ops
-	// Let's skip this test case as permission-based tests are platform-dependent
-
-	// Instead, we'll verify the happy path with removal works
+	// CreateBackup should fail because os.Remove can't delete non-empty directory
 	err := CreateBackup(storagePath)
-	if err != nil {
-		t.Errorf("CreateBackup() failed: %v", err)
+	if err == nil {
+		t.Error("CreateBackup() should fail when backup.3 is a non-empty directory")
 	}
 }
 
 func TestRotateBackups_RenameError(t *testing.T) {
-	// Note: Testing rename errors is platform-dependent and tricky.
-	// On Linux, os.Rename can succeed even when the target is a non-empty directory
-	// if the source is a file. This test verifies that CreateBackup handles
-	// the rotation correctly in normal circumstances.
+	// Create a subdirectory inside tmpDir to control permissions
 	tmpDir := t.TempDir()
-	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	subDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+
+	storagePath := filepath.Join(subDir, "entries.jsonl")
 
 	// Create storage file and backup 1
 	if err := os.WriteFile(storagePath, []byte("test content"), 0644); err != nil {
@@ -1169,10 +1173,17 @@ func TestRotateBackups_RenameError(t *testing.T) {
 		t.Fatalf("Failed to create backup 1: %v", err)
 	}
 
-	// CreateBackup should succeed in normal circumstances
+	// Make the subdirectory read-only so rename operations fail
+	// os.Rename needs write permission on the directory to modify directory entries
+	if err := os.Chmod(subDir, 0555); err != nil {
+		t.Skipf("Cannot change directory permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(subDir, 0755) }()
+
+	// CreateBackup should fail because os.Rename can't modify directory entries in read-only dir
 	err := CreateBackup(storagePath)
-	if err != nil {
-		t.Errorf("CreateBackup() returned unexpected error: %v", err)
+	if err == nil {
+		t.Error("CreateBackup() should fail when directory is read-only")
 	}
 }
 
