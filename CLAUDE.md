@@ -15,6 +15,7 @@
 main.go                           # Entry point
 cmd/
   root.go                         # Cobra command definitions (did, y, w, lw, edit, validate)
+  deps.go                         # Dependency injection (Deps struct, DefaultDeps, SetDeps for testing)
   delete.go                       # Delete command (soft delete)
   undo.go                         # Undo last delete command
   purge.go                        # Purge all soft-deleted entries command
@@ -28,14 +29,20 @@ cmd/
   start.go                        # Start timer command
   stop.go                         # Stop timer command
   status.go                       # Show timer status command
+  last.go                         # "last N days" relative date range command
+  range.go                        # "from ... to ..." custom date range command
 internal/
   config/
     config.go                     # Configuration (Config struct, TOML loading, validation)
     config_test.go
   entry/
     entry.go                      # Entry struct (Timestamp, Description, DurationMinutes, RawInput, DeletedAt)
+    entry_test.go
     parser.go                     # Duration parsing (ParseDuration)
     parser_test.go
+  filter/
+    filter.go                     # Entry filtering (Filter struct, FilterEntries, keyword/project/tag matching)
+    filter_test.go
   storage/
     jsonl.go                      # JSONL storage (AppendEntry, ReadEntries, GetStoragePath, soft delete functions)
     jsonl_test.go
@@ -47,6 +54,8 @@ internal/
   timeutil/
     datefilter.go                 # Date range utilities (Today, Yesterday, ThisWeek, LastWeek, ThisMonth, LastMonth)
     datefilter_test.go
+    dateparser.go                 # Date parsing utilities (ParseDate, ParseRelativeDays)
+    dateparser_test.go
   timer/
     timer.go                      # Timer state management (TimerState, SaveTimerState, LoadTimerState, ClearTimerState)
     timer_test.go

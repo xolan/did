@@ -14,6 +14,7 @@ This is an experimental project created almost exclusively using [Claude Code](h
 ## Features
 
 - Log work activities with duration
+- Timer mode for tracking work in real-time
 - View entries for today, yesterday, this week, or last week
 - Organize entries with projects (`@project`) and tags (`#tag`)
 - Search entries by keyword
@@ -114,6 +115,38 @@ did fix login bug @acme for 1h              # Assign to project 'acme'
 did code review #review for 30m             # Add tag 'review'
 did API work @client #backend #api for 2h   # Project with multiple tags
 ```
+
+### Timer Mode
+
+As an alternative to specifying duration upfront, you can start a timer and stop it when done:
+
+```bash
+did start <description>           # Start a timer
+did status                        # Check current timer status
+did stop                          # Stop timer and create entry
+```
+
+**Examples:**
+
+```bash
+did start fixing auth bug                   # Start simple timer
+did start code review @acme                 # Start timer with project
+did start API work @client #backend #api    # Start timer with project and tags
+did status                                  # Shows elapsed time and description
+did stop                                    # Creates entry with calculated duration
+```
+
+**Timer flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--force`, `-f` | Override existing timer when starting a new one |
+
+**Notes:**
+- Timer state persists across terminal sessions (closing the terminal doesn't lose your tracking)
+- Duration is automatically calculated and rounded to the nearest minute (minimum 1 minute)
+- If a timer is already running when you try to start a new one, you'll be warned (use `--force` to override)
+- The original `did X for Y` syntax continues to work unchanged
 
 ### View entries
 
@@ -274,6 +307,18 @@ Entries are stored in JSONL (JSON Lines) format at:
 | Linux    | `~/.config/did/entries.jsonl` |
 | macOS    | `~/Library/Application Support/did/entries.jsonl` |
 | Windows  | `%AppData%/did/entries.jsonl` |
+
+**Timer State:**
+
+Active timer state is stored in `timer.json` in the same config directory:
+
+| Platform | Location |
+|----------|----------|
+| Linux    | `~/.config/did/timer.json` |
+| macOS    | `~/Library/Application Support/did/timer.json` |
+| Windows  | `%AppData%/did/timer.json` |
+
+The timer file is automatically created when you start a timer and removed when you stop it.
 
 ## Development
 
