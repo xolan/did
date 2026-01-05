@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xolan/did/internal/config"
 )
+
+var configInitFlag bool
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
@@ -28,14 +31,25 @@ Examples:
   Display current configuration:
     did config                       Show all current settings
 
+  Create a sample configuration file:
+    did config --init                Create config.toml with all options
+
 Configuration file location:
   ~/.config/did/config.toml          Linux/macOS
   %APPDATA%\did\config.toml          Windows
 
 To customize settings, create a config.toml file at the location shown above.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		showConfig()
+		if configInitFlag {
+			initConfig()
+		} else {
+			showConfig()
+		}
 	},
+}
+
+func init() {
+	configCmd.Flags().BoolVar(&configInitFlag, "init", false, "create a sample configuration file")
 }
 
 // showConfig displays the current effective configuration
@@ -104,4 +118,61 @@ func showConfig() {
 		_, _ = fmt.Fprintln(deps.Stdout, "     See documentation for available options and examples.")
 		_, _ = fmt.Fprintln(deps.Stdout)
 	}
+}
+
+// initConfig creates a sample configuration file with all options documented
+func initConfig() {
+	// Get config file path
+	configPath, err := config.GetConfigPath()
+	if err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to determine config file location")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		_, _ = fmt.Fprintln(deps.Stderr, "Hint: Check that your home directory is accessible")
+		deps.Exit(1)
+		return
+	}
+
+	// Check if config file already exists
+	if _, err := os.Stat(configPath); err == nil {
+		// File exists, ask for confirmation
+		_, _ = fmt.Fprintf(deps.Stdout, "Config file already exists: %s\n", configPath)
+		if !promptOverwriteConfirmation() {
+			_, _ = fmt.Fprintln(deps.Stdout, "Cancelled. Existing config file not modified.")
+			return
+		}
+	}
+
+	// Generate sample config content
+	sampleConfig := config.GenerateSampleConfig()
+
+	// Write the sample config file
+	if err := os.WriteFile(configPath, []byte(sampleConfig), 0644); err != nil {
+		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to create config file")
+		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		deps.Exit(1)
+		return
+	}
+
+	// Show success message
+	_, _ = fmt.Fprintf(deps.Stdout, "Created sample configuration file: %s\n", configPath)
+	_, _ = fmt.Fprintln(deps.Stdout)
+	_, _ = fmt.Fprintln(deps.Stdout, "Next steps:")
+	_, _ = fmt.Fprintln(deps.Stdout, "  1. Open the config file in your editor")
+	_, _ = fmt.Fprintln(deps.Stdout, "  2. Uncomment and modify the settings you want to customize")
+	_, _ = fmt.Fprintln(deps.Stdout, "  3. Run 'did config' to verify your settings")
+	_, _ = fmt.Fprintln(deps.Stdout)
+}
+
+// promptOverwriteConfirmation asks the user to confirm overwriting the existing config file
+// Returns true if user confirms with 'y' or 'Y', false otherwise
+func promptOverwriteConfirmation() bool {
+	_, _ = fmt.Fprint(deps.Stdout, "Overwrite existing config file? [y/N]: ")
+
+	scanner := bufio.NewScanner(deps.Stdin)
+	if !scanner.Scan() {
+		return false
+	}
+
+	response := strings.TrimSpace(scanner.Text())
+	return response == "y" || response == "Y"
 }

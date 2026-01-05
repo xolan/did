@@ -523,6 +523,8 @@ func TestConstants(t *testing.T) {
 }
 
 func TestLoad_PartialConfig(t *testing.T) {
+	defaultCfg := DefaultConfig()
+
 	tests := []struct {
 		name               string
 		configContent      string
@@ -534,22 +536,21 @@ func TestLoad_PartialConfig(t *testing.T) {
 			name: "only week_start_day",
 			configContent: `week_start_day = "sunday"`,
 			expectedWeekStart: "sunday",
-			expectedTimezone:  "",
-			expectedOutputFmt: "",
+			expectedTimezone:  defaultCfg.Timezone, // Should merge with default
+			expectedOutputFmt: defaultCfg.DefaultOutputFormat,
 		},
 		{
 			name: "only timezone",
 			configContent: `timezone = "America/New_York"`,
-			// week_start_day will be empty string, which is invalid
-			expectedWeekStart: "",
+			expectedWeekStart: defaultCfg.WeekStartDay, // Should merge with default
 			expectedTimezone:  "America/New_York",
-			expectedOutputFmt: "",
+			expectedOutputFmt: defaultCfg.DefaultOutputFormat,
 		},
 		{
 			name: "only output format",
 			configContent: `default_output_format = "json"`,
-			expectedWeekStart: "",
-			expectedTimezone:  "",
+			expectedWeekStart: defaultCfg.WeekStartDay, // Should merge with default
+			expectedTimezone:  defaultCfg.Timezone,
 			expectedOutputFmt: "json",
 		},
 	}
@@ -559,15 +560,6 @@ func TestLoad_PartialConfig(t *testing.T) {
 			tmpFile := createTempConfigFile(t, tt.configContent)
 
 			cfg, err := Load(tmpFile)
-
-			// If week_start_day is missing/empty, validation should fail
-			if tt.expectedWeekStart == "" {
-				if err == nil {
-					t.Error("Load() should return error for missing week_start_day")
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("Load() returned unexpected error: %v", err)
 			}
@@ -588,13 +580,22 @@ func TestLoad_PartialConfig(t *testing.T) {
 func TestLoad_EmptyFile(t *testing.T) {
 	tmpFile := createTempConfigFile(t, "")
 
-	// Empty file should fail validation (missing required week_start_day)
-	_, err := Load(tmpFile)
-	if err == nil {
-		t.Error("Load() should return error for empty config file")
+	// Empty file should now merge with defaults and work correctly
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "invalid week_start_day") {
-		t.Errorf("Error should mention invalid week_start_day, got: %v", err)
+
+	// Should have default values
+	defaultCfg := DefaultConfig()
+	if cfg.WeekStartDay != defaultCfg.WeekStartDay {
+		t.Errorf("WeekStartDay = %q, expected %q", cfg.WeekStartDay, defaultCfg.WeekStartDay)
+	}
+	if cfg.Timezone != defaultCfg.Timezone {
+		t.Errorf("Timezone = %q, expected %q", cfg.Timezone, defaultCfg.Timezone)
+	}
+	if cfg.DefaultOutputFormat != defaultCfg.DefaultOutputFormat {
+		t.Errorf("DefaultOutputFormat = %q, expected %q", cfg.DefaultOutputFormat, defaultCfg.DefaultOutputFormat)
 	}
 }
 

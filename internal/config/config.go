@@ -86,10 +86,12 @@ func (c *Config) Validate() error {
 // Load reads and parses the TOML config file at the given path.
 // Returns an error if the file cannot be read or parsed, or if validation fails.
 // The returned Config is validated and normalized (e.g., week_start_day is lowercase).
+// Empty fields in the config file are replaced with default values.
 func Load(path string) (Config, error) {
-	var cfg Config
+	// Start with default config
+	cfg := DefaultConfig()
 
-	// Read the TOML file
+	// Read the TOML file, which will overwrite only the fields present
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -118,4 +120,64 @@ func LoadOrDefault(path string) (Config, error) {
 
 	// File exists, try to load it
 	return Load(path)
+}
+
+// GenerateSampleConfig returns a sample TOML configuration file content
+// with all options commented out and documented with explanations and examples.
+func GenerateSampleConfig() string {
+	return `# did configuration file
+# This file is optional - did works perfectly without any configuration.
+# All settings have sensible defaults. Uncomment and modify only the
+# settings you want to customize.
+
+# ============================================================================
+# Week Start Day
+# ============================================================================
+# Defines which day starts the week for weekly views (w, lw commands)
+# and statistics (stats command).
+#
+# Valid values: "monday", "sunday"
+# Default: "monday" (ISO 8601 standard)
+#
+# Examples:
+#   week_start_day = "monday"    # Week starts Monday (default)
+#   week_start_day = "sunday"    # Week starts Sunday (US convention)
+#
+# week_start_day = "monday"
+
+# ============================================================================
+# Timezone
+# ============================================================================
+# Defines the timezone for time operations and display.
+# Uses IANA timezone names (e.g., "America/New_York", "Europe/London").
+#
+# Valid values: Any IANA timezone name or "Local" for system timezone
+# Default: "Local" (uses your system's timezone)
+#
+# Examples:
+#   timezone = "Local"              # Use system timezone (default)
+#   timezone = "America/New_York"   # Eastern Time
+#   timezone = "Europe/London"      # British Time
+#   timezone = "Asia/Tokyo"         # Japan Time
+#   timezone = "UTC"                # Coordinated Universal Time
+#
+# To see available timezones, check:
+#   https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+#
+# timezone = "Local"
+
+# ============================================================================
+# Default Output Format
+# ============================================================================
+# Defines the default output format for entry listings.
+# This setting is reserved for future use when custom output formats
+# are implemented.
+#
+# Default: "" (uses the built-in default format)
+#
+# Examples:
+#   default_output_format = ""      # Use default format (default)
+#
+# default_output_format = ""
+`
 }
