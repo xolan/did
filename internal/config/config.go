@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/osutil"
 )
 
 const (
-	// AppName is the application name used for config directory
-	AppName = "did"
 	// ConfigFile is the name of the TOML configuration file
 	ConfigFile = "config.toml"
 )
@@ -49,7 +48,7 @@ func GetConfigPath() (string, error) {
 		return "", err
 	}
 
-	appDir := filepath.Join(configDir, AppName)
+	appDir := filepath.Join(configDir, app.Name)
 
 	// Create config directory if it doesn't exist
 	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {
@@ -59,22 +58,17 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(appDir, ConfigFile), nil
 }
 
-// Validate checks if the Config values are valid and returns helpful error messages.
-// Validates that:
-// - week_start_day is either "monday" or "sunday" (case-insensitive)
-// - timezone is a valid IANA timezone name (e.g., "America/New_York") or "Local"
+func (c *Config) Normalize() {
+	c.WeekStartDay = strings.ToLower(strings.TrimSpace(c.WeekStartDay))
+	c.Timezone = strings.TrimSpace(c.Timezone)
+}
+
 func (c *Config) Validate() error {
-	// Normalize week_start_day to lowercase for comparison
-	weekStartDay := strings.ToLower(strings.TrimSpace(c.WeekStartDay))
-	if weekStartDay != "monday" && weekStartDay != "sunday" {
+	if c.WeekStartDay != "monday" && c.WeekStartDay != "sunday" {
 		return fmt.Errorf("invalid week_start_day: must be 'monday' or 'sunday', got '%s'", c.WeekStartDay)
 	}
-	// Normalize the value in the config
-	c.WeekStartDay = weekStartDay
 
-	// Validate timezone
 	if c.Timezone != "" && c.Timezone != "Local" {
-		// Try to load the timezone to validate it exists
 		_, err := time.LoadLocation(c.Timezone)
 		if err != nil {
 			return fmt.Errorf("invalid timezone: '%s' is not a valid IANA timezone (e.g., 'America/New_York', 'Europe/London')", c.Timezone)
@@ -84,20 +78,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Load reads and parses the TOML config file at the given path.
-// Returns an error if the file cannot be read or parsed, or if validation fails.
-// The returned Config is validated and normalized (e.g., week_start_day is lowercase).
-// Empty fields in the config file are replaced with default values.
 func Load(path string) (Config, error) {
-	// Start with default config
 	cfg := DefaultConfig()
 
-	// Read the TOML file, which will overwrite only the fields present
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Validate the loaded config
+	cfg.Normalize()
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}

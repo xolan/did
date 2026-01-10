@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/osutil"
 )
 
@@ -410,13 +411,13 @@ func TestValidate_ValidConfigs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.config.Normalize()
 			err := tt.config.Validate()
 			if err != nil {
 				t.Errorf("Validate() returned unexpected error: %v", err)
 			}
-			// Check that week_start_day is normalized to lowercase
 			if tt.config.WeekStartDay != tt.wantLower {
-				t.Errorf("After Validate(), WeekStartDay = %q, expected %q", tt.config.WeekStartDay, tt.wantLower)
+				t.Errorf("After Normalize()+Validate(), WeekStartDay = %q, expected %q", tt.config.WeekStartDay, tt.wantLower)
 			}
 		})
 	}
@@ -508,15 +509,15 @@ func TestGetConfigPath(t *testing.T) {
 	}
 
 	// Directory name should contain app name
-	if !strings.Contains(parentDir, AppName) {
-		t.Errorf("GetConfigPath() parent directory should contain %q, got %q", AppName, parentDir)
+	if !strings.Contains(parentDir, app.Name) {
+		t.Errorf("GetConfigPath() parent directory should contain %q, got %q", app.Name, parentDir)
 	}
 }
 
 func TestConstants(t *testing.T) {
 	// Verify constants are set correctly
-	if AppName != "did" {
-		t.Errorf("AppName = %q, expected %q", AppName, "did")
+	if app.Name != "did" {
+		t.Errorf("app.Name = %q, expected %q", app.Name, "did")
 	}
 
 	if ConfigFile != "config.toml" {
@@ -657,13 +658,14 @@ func TestValidate_NormalizesWeekStartDay(t *testing.T) {
 				Timezone:     "Local",
 			}
 
+			cfg.Normalize()
 			err := cfg.Validate()
 			if err != nil {
-				t.Fatalf("Validate() returned unexpected error: %v", err)
+				t.Fatalf("Normalize()+Validate() returned unexpected error: %v", err)
 			}
 
 			if cfg.WeekStartDay != tt.expected {
-				t.Errorf("After Validate(), WeekStartDay = %q, expected %q", cfg.WeekStartDay, tt.expected)
+				t.Errorf("After Normalize(), WeekStartDay = %q, expected %q", cfg.WeekStartDay, tt.expected)
 			}
 		})
 	}
