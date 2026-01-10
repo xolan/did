@@ -13,8 +13,10 @@ var (
 	date    = "unknown"
 )
 
+var exitFunc = os.Exit
+
 func main() {
-	os.Exit(run())
+	exitFunc(run())
 }
 
 // run executes the main application logic and returns an exit code.

@@ -60,15 +60,34 @@ func TestRun_ConfigValidationFailure(t *testing.T) {
 }
 
 func TestRun_ExecuteError(t *testing.T) {
-	// Save original os.Args
 	originalArgs := os.Args
 	defer func() { os.Args = originalArgs }()
 
-	// Set args to trigger an unknown flag error from Cobra
 	os.Args = []string{"did", "--unknownflag"}
 
 	code := run()
 	if code != 1 {
 		t.Errorf("Expected exit code 1 for Execute error, got %d", code)
+	}
+}
+
+func TestMain_CallsExitWithRunResult(t *testing.T) {
+	originalExit := exitFunc
+	originalArgs := os.Args
+	defer func() {
+		exitFunc = originalExit
+		os.Args = originalArgs
+	}()
+
+	var capturedCode int
+	exitFunc = func(code int) {
+		capturedCode = code
+	}
+	os.Args = []string{"did"}
+
+	main()
+
+	if capturedCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", capturedCode)
 	}
 }
