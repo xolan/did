@@ -119,6 +119,54 @@ func TestRestoreFromBackup_InvalidNumber(t *testing.T) {
 	}
 }
 
+func TestRestoreFromBackup_BackupNumberOutOfRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+	if err := storage.CreateBackup(storagePath); err != nil {
+		t.Fatalf("Failed to create backup: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		arg      string
+		expected string
+	}{
+		{"zero", "0", "must be between 1 and 3"},
+		{"negative", "-1", "must be between 1 and 3"},
+		{"too high", "4", "must be between 1 and 3"},
+		{"way too high", "100", "must be between 1 and 3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCalled := false
+			d, _, stderr := testDeps(storagePath)
+			d.Exit = func(code int) { exitCalled = true }
+			SetDeps(d)
+			defer ResetDeps()
+
+			restoreFromBackup([]string{tt.arg})
+
+			if !exitCalled {
+				t.Error("Expected exit to be called")
+			}
+			if !strings.Contains(stderr.String(), tt.expected) {
+				t.Errorf("Expected '%s' error, got: %s", tt.expected, stderr.String())
+			}
+		})
+	}
+}
+
 func TestRestoreFromBackup_BackupNotExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")

@@ -65,8 +65,7 @@ func restoreFromBackup(args []string) {
 	}
 	_, _ = fmt.Fprintln(deps.Stdout)
 
-	// Determine which backup to restore
-	backupNum := 1 // Default to most recent
+	backupNum := 1
 	if len(args) > 0 {
 		num, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -74,10 +73,14 @@ func restoreFromBackup(args []string) {
 			deps.Exit(1)
 			return
 		}
+		if num < 1 || num > 3 {
+			_, _ = fmt.Fprintf(deps.Stderr, "Error: Backup number must be between 1 and 3 (got %d)\n", num)
+			deps.Exit(1)
+			return
+		}
 		backupNum = num
 	}
 
-	// Validate backup exists
 	backupExists := false
 	for _, backup := range backups {
 		if backup.Number == backupNum {
