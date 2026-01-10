@@ -3978,6 +3978,48 @@ func TestExportCSV_OnlyToDateIncludesFromBeginning(t *testing.T) {
 	}
 }
 
+func TestExportJSON_EncodeError(t *testing.T) {
+	// Tests the JSON encoder error path (line 275-279 in export.go)
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a test entry
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "Test entry",
+		DurationMinutes: 60,
+		RawInput:        "Test entry for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &countedFailingWriter{failAfter: 0}, // Fail immediately on write
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportJSON(exportJSONCmd)
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when JSON encoding fails")
+	}
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "Failed to encode JSON output") {
+		t.Errorf("Expected JSON encode error, got: %s", stderrOutput)
+	}
+}
+
 func TestExportCSV_FlushError(t *testing.T) {
 	// Tests the flush error path at the end of exportCSV
 	// csv.Writer buffers writes, so the error is detected during Flush()

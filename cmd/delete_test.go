@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -606,6 +607,53 @@ func TestEditCommand_Run(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "Updated entry 1") {
 		t.Errorf("Expected 'Updated entry 1', got: %s", stdout.String())
+	}
+}
+
+func TestDeleteEntry_SoftDeleteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	testEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "test",
+		DurationMinutes: 60,
+		RawInput:        "test for 1h",
+	}
+	if err := storage.AppendEntry(storagePath, testEntry); err != nil {
+		t.Fatalf("Failed to create test entry: %v", err)
+	}
+
+	if err := os.Chmod(storagePath, 0444); err != nil {
+		t.Fatalf("Failed to make file read-only: %v", err)
+	}
+	defer os.Chmod(storagePath, 0644)
+
+	exitCalled := false
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) { exitCalled = true },
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	yesFlag = true
+	defer func() { yesFlag = false }()
+
+	deleteEntry("1")
+
+	if !exitCalled {
+		t.Error("Expected exit to be called when SoftDeleteEntry fails")
+	}
+
+	if !strings.Contains(stderr.String(), "Failed to delete entry") {
+		t.Errorf("Expected 'Failed to delete entry' error, got: %s", stderr.String())
 	}
 }
 
