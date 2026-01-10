@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1362,4 +1363,45 @@ func TestIntegration_MultipleTagFiltersANDLogic(t *testing.T) {
 
 	// Clean up
 	resetFilterFlags(rootCmd)
+}
+
+func TestSearchEntries_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	// Create a file with both valid and corrupted entries
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h"}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	searchEntries(searchCmd, []string{"Valid"})
+
+	// Should show warning about corrupted line in stderr
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	// Should still show valid entry in stdout
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Errorf("Expected valid entry in stdout, got: %s", stdoutOutput)
+	}
 }

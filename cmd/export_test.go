@@ -4062,3 +4062,79 @@ func TestExportCSV_FlushError(t *testing.T) {
 		t.Errorf("Expected CSV flush error, got: %s", stderrOutput)
 	}
 }
+
+func TestExportJSON_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h"}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportJSON(exportJSONCmd)
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Errorf("Expected valid entry in stdout, got: %s", stdoutOutput)
+	}
+}
+
+func TestExportCSV_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h"}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	exportCSV(exportCSVCmd)
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Errorf("Expected valid entry in stdout, got: %s", stdoutOutput)
+	}
+}

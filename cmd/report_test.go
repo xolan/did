@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -2133,5 +2134,175 @@ func TestReport_DateRangeFiltering(t *testing.T) {
 		t.Errorf("Expected 'Total: 1h 30m', got: %s", output)
 	}
 
+	resetFilterFlags(reportCmd)
+}
+
+func TestReport_SingleProject_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h","project":"acme"}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(reportCmd)
+	_ = reportCmd.Root().PersistentFlags().Set("project", "acme")
+	runReport(reportCmd, []string{})
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Errorf("Expected valid entry in stdout, got: %s", stdoutOutput)
+	}
+
+	resetFilterFlags(reportCmd)
+}
+
+func TestReport_SingleTag_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h","tags":["review"]}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(reportCmd)
+	_ = reportCmd.Root().PersistentFlags().Set("tag", "review")
+	runReport(reportCmd, []string{})
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "Valid entry") {
+		t.Errorf("Expected valid entry in stdout, got: %s", stdoutOutput)
+	}
+
+	resetFilterFlags(reportCmd)
+}
+
+func TestReport_GroupByProject_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h","project":"acme"}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(reportCmd)
+	_ = reportCmd.Flags().Set("by", "project")
+	runReport(reportCmd, []string{})
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "acme") {
+		t.Errorf("Expected project 'acme' in stdout, got: %s", stdoutOutput)
+	}
+
+	_ = reportCmd.Flags().Set("by", "")
+	resetFilterFlags(reportCmd)
+}
+
+func TestReport_GroupByTag_CorruptedStorageWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	validEntry := `{"timestamp":"2024-01-15T10:00:00Z","description":"Valid entry","duration_minutes":60,"raw_input":"Valid entry for 1h","tags":["review"]}`
+	corruptedLine := `{invalid json}`
+	content := validEntry + "\n" + corruptedLine + "\n"
+	if err := os.WriteFile(storagePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	d := &Deps{
+		Stdout: stdout,
+		Stderr: stderr,
+		Stdin:  strings.NewReader(""),
+		Exit:   func(code int) {},
+		StoragePath: func() (string, error) {
+			return storagePath, nil
+		},
+	}
+	SetDeps(d)
+	defer ResetDeps()
+
+	resetFilterFlags(reportCmd)
+	_ = reportCmd.Flags().Set("by", "tag")
+	runReport(reportCmd, []string{})
+
+	stderrOutput := stderr.String()
+	if !strings.Contains(stderrOutput, "corrupted line") {
+		t.Errorf("Expected corruption warning in stderr, got: %s", stderrOutput)
+	}
+
+	stdoutOutput := stdout.String()
+	if !strings.Contains(stdoutOutput, "review") {
+		t.Errorf("Expected tag 'review' in stdout, got: %s", stdoutOutput)
+	}
+
+	_ = reportCmd.Flags().Set("by", "")
 	resetFilterFlags(reportCmd)
 }
