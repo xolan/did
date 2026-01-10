@@ -627,7 +627,7 @@ func TestDeleteEntry_SoftDeleteError(t *testing.T) {
 	if err := os.Chmod(storagePath, 0444); err != nil {
 		t.Fatalf("Failed to make file read-only: %v", err)
 	}
-	defer os.Chmod(storagePath, 0644)
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
 
 	exitCalled := false
 	stderr := &bytes.Buffer{}

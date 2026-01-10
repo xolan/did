@@ -59,24 +59,3 @@ func validateStorageScanAndRead(file *os.File, filepath string, health *StorageH
 func getBackupPathWithError(storagePath string, n int) (string, error) {
 	return GetBackupPathForStorage(storagePath, n)
 }
-
-func updateEntryAtomicWrite(filepath string, entries []entry.Entry) error {
-	tmpFile := filepath + ".tmp"
-	file, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-
-	if err := writeEntriesToTempFile(file, tmpFile, entries); err != nil {
-		return err
-	}
-
-	return os.Rename(tmpFile, filepath)
-}
-
-func validateStorageWithFile(file *os.File, filepath string, health *StorageHealth) error {
-	if err := validateStorageScanAndRead(file, filepath, health); err != nil {
-		return err
-	}
-	return nil
-}
