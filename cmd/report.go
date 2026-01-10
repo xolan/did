@@ -344,18 +344,16 @@ func runSingleTagReport(cmd *cobra.Command, tagFilters []string) {
 			startDate = time.Time{}
 		}
 
-		// Parse to date
 		if toStr != "" {
 			var err error
 			toDate, err := timeutil.ParseDate(toStr)
 			if err != nil {
-				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --from date: %v\n", err)
+				_, _ = fmt.Fprintf(deps.Stderr, "Error: Invalid --to date: %v\n", err)
 				deps.Exit(1)
 				return
 			}
 			endDate = timeutil.EndOfDay(toDate)
 		} else {
-			// No to date: use now
 			endDate = timeutil.EndOfDay(time.Now())
 		}
 	}
