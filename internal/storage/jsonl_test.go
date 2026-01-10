@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/osutil"
 )
@@ -444,8 +445,8 @@ func TestGetStoragePath(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	// Verify constants are set correctly
-	if AppName != "did" {
-		t.Errorf("AppName = %q, expected %q", AppName, "did")
+	if app.Name != "did" {
+		t.Errorf("app.Name = %q, expected %q", app.Name, "did")
 	}
 
 	if EntriesFile != "entries.jsonl" {
@@ -2192,21 +2193,52 @@ func TestValidateStorage_ReadEntriesError(t *testing.T) {
 	tmpDir := t.TempDir()
 	storagePath := filepath.Join(tmpDir, "entries.jsonl")
 
-	// Create a valid file
 	if err := os.WriteFile(storagePath, []byte("{}\n"), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Make file unreadable after Stat succeeds and first scan completes
-	// This is tricky - we need to cause ReadEntriesWithWarnings to fail
-	// after the initial line count scan. This is hard to simulate reliably.
-
-	// Instead, test the happy path - ValidateStorage handles all cases correctly
 	health, err := ValidateStorage(storagePath)
 	if err != nil {
 		t.Errorf("ValidateStorage() returned unexpected error: %v", err)
 	}
 	if health.TotalLines != 1 {
 		t.Errorf("TotalLines = %d, expected 1", health.TotalLines)
+	}
+}
+
+func TestUpdateEntry_WriteStringError(t *testing.T) {
+	tmpDir := t.TempDir()
+	subDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdir: %v", err)
+	}
+
+	storagePath := filepath.Join(subDir, "entries.jsonl")
+
+	e := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "original",
+		DurationMinutes: 30,
+		RawInput:        "original for 30m",
+	}
+	if err := AppendEntry(storagePath, e); err != nil {
+		t.Fatalf("AppendEntry() failed: %v", err)
+	}
+
+	if err := os.Chmod(subDir, 0555); err != nil {
+		t.Skipf("Cannot change directory permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(subDir, 0755) }()
+
+	updatedEntry := entry.Entry{
+		Timestamp:       time.Now(),
+		Description:     "updated",
+		DurationMinutes: 60,
+		RawInput:        "updated for 1h",
+	}
+
+	err := UpdateEntry(storagePath, 0, updatedEntry)
+	if err == nil {
+		t.Error("UpdateEntry() should return error when directory is read-only")
 	}
 }

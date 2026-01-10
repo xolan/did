@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/osutil"
 )
 
@@ -595,8 +596,8 @@ func TestGetTimerPath(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	// Verify constants are set correctly
-	if AppName != "did" {
-		t.Errorf("AppName = %q, expected %q", AppName, "did")
+	if app.Name != "did" {
+		t.Errorf("app.Name = %q, expected %q", app.Name, "did")
 	}
 
 	if TimerFile != "timer.json" {

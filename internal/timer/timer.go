@@ -6,12 +6,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/osutil"
 )
 
 const (
-	// AppName is the application name used for config directory
-	AppName = "did"
 	// TimerFile is the name of the JSON timer state file
 	TimerFile = "timer.json"
 )
@@ -33,7 +32,7 @@ func GetTimerPath() (string, error) {
 		return "", err
 	}
 
-	appDir := filepath.Join(configDir, AppName)
+	appDir := filepath.Join(configDir, app.Name)
 
 	// Create config directory if it doesn't exist
 	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {

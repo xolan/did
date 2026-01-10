@@ -1374,6 +1374,73 @@ func TestRestoreBackupForStorage_WriteFileError(t *testing.T) {
 	// Let's use a different approach: create a subdirectory named as the storage file
 	// This won't work because CreateBackup needs to read the storage file
 
-	// Skip this test as it's very hard to trigger WriteFile error after CreateBackup succeeds
 	t.Skip("WriteFile error path is difficult to test - requires storage to exist for CreateBackup but fail for WriteFile")
+}
+
+func TestCreateBackup_GetBackupPathForStorageError(t *testing.T) {
+	t.Skip("GetBackupPathForStorage doesn't fail when storagePath is provided explicitly")
+}
+
+func TestCreateBackup_ReadFromError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	if err := os.WriteFile(storagePath, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+
+	if err := os.Chmod(storagePath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(storagePath, 0644) }()
+
+	err := CreateBackup(storagePath)
+	if err == nil {
+		t.Error("CreateBackup() should return error when source file is unreadable")
+	}
+}
+
+func TestRestoreBackupForStorage_GetBackupPathForStorageError(t *testing.T) {
+	defer osutil.ResetProvider()
+
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+
+	if err := os.WriteFile(storagePath, []byte("current content"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+
+	osutil.SetProvider(&backupMockPathProvider{
+		userConfigDirFn: func() (string, error) {
+			return "", os.ErrPermission
+		},
+	})
+
+	err := RestoreBackupForStorage(storagePath, 1)
+	if err == nil {
+		t.Error("RestoreBackupForStorage() should return error when GetBackupPathForStorage fails")
+	}
+}
+
+func TestRestoreBackupForStorage_ReadFilePermissionError(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "entries.jsonl")
+	backupPath := storagePath + ".bak.1"
+
+	if err := os.WriteFile(storagePath, []byte("current"), 0644); err != nil {
+		t.Fatalf("Failed to create storage file: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("backup"), 0644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	if err := os.Chmod(backupPath, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer func() { _ = os.Chmod(backupPath, 0644) }()
+
+	err := RestoreBackupForStorage(storagePath, 1)
+	if err == nil {
+		t.Error("RestoreBackupForStorage() should return error when backup file is unreadable")
+	}
 }

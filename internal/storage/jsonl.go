@@ -8,13 +8,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/xolan/did/internal/app"
 	"github.com/xolan/did/internal/entry"
 	"github.com/xolan/did/internal/osutil"
 )
 
 const (
-	// AppName is the application name used for config directory
-	AppName = "did"
 	// EntriesFile is the name of the JSON Lines storage file
 	EntriesFile = "entries.jsonl"
 )
@@ -43,7 +42,7 @@ func GetStoragePath() (string, error) {
 		return "", err
 	}
 
-	appDir := filepath.Join(configDir, AppName)
+	appDir := filepath.Join(configDir, app.Name)
 
 	// Create config directory if it doesn't exist
 	if err := osutil.Provider.MkdirAll(appDir, 0755); err != nil {
