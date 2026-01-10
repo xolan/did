@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -442,7 +443,7 @@ func createEntry(args []string) {
 	// Create the entry
 	e := entry.Entry{
 		Timestamp:       time.Now(),
-		Description:     description,
+		Description:     cleanDesc,
 		DurationMinutes: minutes,
 		RawInput:        rawInput,
 		Project:         project,
@@ -508,33 +509,39 @@ func listEntriesForRange(cmd *cobra.Command, period string, start, end time.Time
 		_, _ = fmt.Fprintln(deps.Stderr)
 	}
 
-	// Filter out soft-deleted entries (where DeletedAt is not nil)
-	var activeEntries []entry.Entry
+	type indexedEntry struct {
+		entry.Entry
+		activeIndex int
+	}
+
+	var activeEntries []indexedEntry
+	activeIdx := 0
 	for _, e := range result.Entries {
 		if e.DeletedAt == nil {
-			activeEntries = append(activeEntries, e)
-		}
-	}
-	entries := activeEntries
-
-	// Filter entries by time range
-	var filtered []entry.Entry
-	for _, e := range entries {
-		if timeutil.IsInRange(e.Timestamp, start, end) {
-			filtered = append(filtered, e)
+			activeIdx++
+			activeEntries = append(activeEntries, indexedEntry{Entry: e, activeIndex: activeIdx})
 		}
 	}
 
-	// Get filter flags and apply project/tag filters
+	var filtered []indexedEntry
+	for _, ie := range activeEntries {
+		if timeutil.IsInRange(ie.Timestamp, start, end) {
+			filtered = append(filtered, ie)
+		}
+	}
+
 	projectFilter, _ := cmd.Root().PersistentFlags().GetString("project")
 	tagFilters, _ := cmd.Root().PersistentFlags().GetStringSlice("tag")
 
-	// Create filter and apply if any filters are set
 	f := filter.NewFilter("", projectFilter, tagFilters)
 	if !f.IsEmpty() {
-		filtered = filter.FilterEntries(filtered, f)
-
-		// Update period description to show active filters
+		var projectTagFiltered []indexedEntry
+		for _, ie := range filtered {
+			if f.Matches(ie.Entry) {
+				projectTagFiltered = append(projectTagFiltered, ie)
+			}
+		}
+		filtered = projectTagFiltered
 		period = buildPeriodWithFilters(period, projectFilter, tagFilters)
 	}
 
@@ -543,26 +550,44 @@ func listEntriesForRange(cmd *cobra.Command, period string, start, end time.Time
 		return
 	}
 
-	// Calculate total duration
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.Before(filtered[j].Timestamp)
+	})
+
 	totalMinutes := 0
-	for _, e := range filtered {
-		totalMinutes += e.DurationMinutes
+	for _, ie := range filtered {
+		totalMinutes += ie.DurationMinutes
 	}
 
-	// Display entries
 	_, _ = fmt.Fprintf(deps.Stdout, "Entries for %s:\n", period)
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
 
-	// Calculate width for right-aligned indices
-	maxIndexWidth := len(fmt.Sprintf("%d", len(filtered)))
+	maxIndex := activeEntries[len(activeEntries)-1].activeIndex
+	maxIndexWidth := len(fmt.Sprintf("%d", maxIndex))
 
-	for i, e := range filtered {
-		_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s  %s (%s)\n",
-			maxIndexWidth,
-			i+1, // 1-based index for user reference
-			e.Timestamp.Format("15:04"),
-			formatEntryForLog(e.Description, e.Project, e.Tags),
-			formatDuration(e.DurationMinutes))
+	entriesForDateCheck := make([]entry.Entry, len(filtered))
+	for i, ie := range filtered {
+		entriesForDateCheck[i] = ie.Entry
+	}
+	showDate := spansMultipleDays(entriesForDateCheck)
+
+	for _, ie := range filtered {
+		if showDate {
+			_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s %s  %s (%s)\n",
+				maxIndexWidth,
+				ie.activeIndex,
+				ie.Timestamp.Format("2006-01-02"),
+				ie.Timestamp.Format("15:04"),
+				formatEntryForLog(ie.Description, ie.Project, ie.Tags),
+				formatDuration(ie.DurationMinutes))
+		} else {
+			_, _ = fmt.Fprintf(deps.Stdout, "[%*d] %s  %s (%s)\n",
+				maxIndexWidth,
+				ie.activeIndex,
+				ie.Timestamp.Format("15:04"),
+				formatEntryForLog(ie.Description, ie.Project, ie.Tags),
+				formatDuration(ie.DurationMinutes))
+		}
 	}
 	_, _ = fmt.Fprintln(deps.Stdout, strings.Repeat("-", 50))
 	_, _ = fmt.Fprintf(deps.Stdout, "Total: %s\n", formatDuration(totalMinutes))
@@ -858,4 +883,17 @@ func pluralize(word string, count int) string {
 		return word
 	}
 	return word + "s"
+}
+
+func spansMultipleDays(entries []entry.Entry) bool {
+	if len(entries) < 2 {
+		return false
+	}
+	firstDay := entries[0].Timestamp.Format("2006-01-02")
+	for _, e := range entries[1:] {
+		if e.Timestamp.Format("2006-01-02") != firstDay {
+			return true
+		}
+	}
+	return false
 }
