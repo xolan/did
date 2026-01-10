@@ -40,11 +40,9 @@ func restoreFromBackup(args []string) {
 		return
 	}
 
-	// List available backups
 	backups, err := storage.ListBackupsForStorage(storagePath)
 	if err != nil {
-		_, _ = fmt.Fprintf(deps.Stderr, "Error: Failed to list backups: %v\n", err)
-		deps.Exit(1)
+		handleListBackupsError(err)
 		return
 	}
 

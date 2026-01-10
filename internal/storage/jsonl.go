@@ -154,15 +154,7 @@ func WriteEntries(filepath string, entries []entry.Entry) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	for _, e := range entries {
-		// Entry struct contains only JSON-safe types, so Marshal cannot fail
-		line, _ := json.Marshal(e)
-		if _, err := file.WriteString(string(line) + "\n"); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return writeEntriesToFile(file, entries)
 }
 
 // SoftDeleteEntry marks an entry as deleted by setting its DeletedAt timestamp.
@@ -367,24 +359,10 @@ func UpdateEntry(filepath string, index int, e entry.Entry) error {
 		return err
 	}
 
-	// Write all entries to temp file
-	for _, entry := range entries {
-		// Entry struct contains only JSON-safe types, so Marshal cannot fail
-		line, _ := json.Marshal(entry)
-		if _, err := file.WriteString(string(line) + "\n"); err != nil {
-			_ = file.Close()
-			_ = os.Remove(tmpFile)
-			return err
-		}
-	}
-
-	// Close temp file before rename
-	if err := file.Close(); err != nil {
-		_ = os.Remove(tmpFile)
+	if err := writeEntriesToTempFile(file, tmpFile, entries); err != nil {
 		return err
 	}
 
-	// Atomic rename
 	return os.Rename(tmpFile, filepath)
 }
 
@@ -409,7 +387,6 @@ func ValidateStorage(filepath string) (StorageHealth, error) {
 		Warnings:         []ParseWarning{},
 	}
 
-	// Check if file exists
 	file, err := os.Open(filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -419,25 +396,9 @@ func ValidateStorage(filepath string) (StorageHealth, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Count total lines
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		health.TotalLines++
-	}
-
-	if err := scanner.Err(); err != nil {
+	if err := validateStorageScanAndRead(file, filepath, &health); err != nil {
 		return health, err
 	}
-
-	// Get entries and warnings
-	result, err := ReadEntriesWithWarnings(filepath)
-	if err != nil {
-		return health, err
-	}
-
-	health.ValidEntries = len(result.Entries)
-	health.CorruptedEntries = len(result.Warnings)
-	health.Warnings = result.Warnings
 
 	return health, nil
 }

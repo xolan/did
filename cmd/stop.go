@@ -89,12 +89,8 @@ func stopTimer() {
 		return
 	}
 
-	// Clear timer state after successful entry creation
 	if err := timer.ClearTimerState(timerPath); err != nil {
-		// Entry was saved successfully, but we couldn't clear the timer
-		// This is not critical - warn but don't exit with error
-		_, _ = fmt.Fprintln(deps.Stderr, "Warning: Entry saved but failed to clear timer state")
-		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
+		warnClearTimerStateFailed(err)
 	}
 
 	// Display success message

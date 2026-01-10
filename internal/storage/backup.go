@@ -82,8 +82,7 @@ func CreateBackup(storagePath string) error {
 		return err
 	}
 
-	// Get path for the new backup (.bak.1)
-	backupPath, err := GetBackupPathForStorage(storagePath, 1)
+	backupPath, err := getBackupPathWithError(storagePath, 1)
 	if err != nil {
 		return err
 	}
@@ -171,8 +170,7 @@ func RestoreBackupForStorage(storagePath string, backupNum int) error {
 		}
 	}
 
-	// Get the backup path
-	backupPath, err := GetBackupPathForStorage(storagePath, backupNum)
+	backupPath, err := getBackupPathWithError(storagePath, backupNum)
 	if err != nil {
 		return err
 	}

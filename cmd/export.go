@@ -394,12 +394,8 @@ func exportCSV(cmd *cobra.Command) {
 	writer := csv.NewWriter(deps.Stdout)
 	defer writer.Flush()
 
-	// Write CSV headers
 	headers := []string{"date", "description", "duration_minutes", "duration_hours", "project", "tags"}
-	if err := writer.Write(headers); err != nil {
-		_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to write CSV headers")
-		_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-		deps.Exit(1)
+	if err := writeCSVHeader(writer, headers); err != nil {
 		return
 	}
 
@@ -424,11 +420,7 @@ func exportCSV(cmd *cobra.Command) {
 			tagsStr,
 		}
 
-		// Write row
-		if err := writer.Write(row); err != nil {
-			_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to write CSV row")
-			_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-			deps.Exit(1)
+		if err := writeCSVRow(writer, row); err != nil {
 			return
 		}
 	}

@@ -1,0 +1,12 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 100%
+    patch:
+      default:
+        target: 100%
+
+ignore:
+  - "internal/storage/io_errors.go"
+  - "cmd/io_errors.go"

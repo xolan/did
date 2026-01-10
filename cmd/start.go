@@ -84,13 +84,9 @@ func startTimer(args []string) {
 		return
 	}
 
-	// If timer is already running and --force flag is not set, show warning and exit
 	if isRunning && !forceFlag {
-		existingTimer, err := timer.LoadTimerState(timerPath)
+		existingTimer, err := loadExistingTimerState(timerPath)
 		if err != nil {
-			_, _ = fmt.Fprintln(deps.Stderr, "Error: Failed to load existing timer")
-			_, _ = fmt.Fprintf(deps.Stderr, "Details: %v\n", err)
-			deps.Exit(1)
 			return
 		}
 
