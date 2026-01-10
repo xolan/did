@@ -77,6 +77,9 @@ var projectPattern = regexp.MustCompile(`@([a-zA-Z0-9_-]+)`)
 // Tag names can contain alphanumeric characters, hyphens, and underscores
 var tagPattern = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
 
+// whitespacePattern matches one or more whitespace characters for normalization
+var whitespacePattern = regexp.MustCompile(`\s+`)
+
 // ParseProjectAndTags extracts @project and #tags from a description string.
 // Returns the cleaned description (without @project and #tags), the project name (if any),
 // and a slice of tags.
@@ -99,10 +102,8 @@ func ParseProjectAndTags(description string) (cleanDesc string, project string, 
 	cleanDesc = projectPattern.ReplaceAllString(description, "")
 	cleanDesc = tagPattern.ReplaceAllString(cleanDesc, "")
 
-	// Clean up excess whitespace
 	cleanDesc = strings.TrimSpace(cleanDesc)
-	// Replace multiple spaces with a single space
-	cleanDesc = regexp.MustCompile(`\s+`).ReplaceAllString(cleanDesc, " ")
+	cleanDesc = whitespacePattern.ReplaceAllString(cleanDesc, " ")
 
 	return cleanDesc, project, tags
 }
