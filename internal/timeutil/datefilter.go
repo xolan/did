@@ -68,8 +68,9 @@ func ThisWeek() (start, end time.Time) {
 
 // LastWeek returns the start and end times for the previous week (Monday-Sunday)
 func LastWeek() (start, end time.Time) {
-	lastWeek := time.Now().AddDate(0, 0, -7)
-	return StartOfWeek(lastWeek), EndOfWeek(lastWeek)
+	thisWeekStart, _ := ThisWeek()
+	lastWeekStart := thisWeekStart.AddDate(0, 0, -7)
+	return lastWeekStart, EndOfWeek(lastWeekStart)
 }
 
 // StartOfMonth returns the first day of the month at 00:00:00 in the same timezone
@@ -99,4 +100,33 @@ func LastMonth() (start, end time.Time) {
 // IsInRange checks if the given time t falls within the range [start, end] (inclusive)
 func IsInRange(t, start, end time.Time) bool {
 	return (t.Equal(start) || t.After(start)) && (t.Equal(end) || t.Before(end))
+}
+
+// LoadTimezone loads a timezone by name. Returns Local if name is empty or "Local".
+// Returns an error if the timezone name is invalid.
+func LoadTimezone(tz string) (*time.Location, error) {
+	if tz == "" || tz == "Local" {
+		return time.Local, nil
+	}
+	return time.LoadLocation(tz)
+}
+
+// NowIn returns the current time in the specified timezone.
+// Falls back to Local if timezone is invalid or empty.
+func NowIn(tz string) time.Time {
+	loc, err := LoadTimezone(tz)
+	if err != nil {
+		return time.Now()
+	}
+	return time.Now().In(loc)
+}
+
+// InTimezone converts a time to the specified timezone.
+// Returns the original time if timezone is invalid or empty.
+func InTimezone(t time.Time, tz string) time.Time {
+	loc, err := LoadTimezone(tz)
+	if err != nil {
+		return t
+	}
+	return t.In(loc)
 }

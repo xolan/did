@@ -1269,3 +1269,201 @@ func TestStartOfWeekWithConfig_DefaultsToMonday(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadTimezone(t *testing.T) {
+	tests := []struct {
+		name       string
+		tz         string
+		wantLocal  bool
+		wantErr    bool
+		wantTzName string
+	}{
+		{
+			name:      "empty string returns Local",
+			tz:        "",
+			wantLocal: true,
+			wantErr:   false,
+		},
+		{
+			name:      "Local string returns Local",
+			tz:        "Local",
+			wantLocal: true,
+			wantErr:   false,
+		},
+		{
+			name:       "valid timezone America/New_York",
+			tz:         "America/New_York",
+			wantLocal:  false,
+			wantErr:    false,
+			wantTzName: "America/New_York",
+		},
+		{
+			name:       "valid timezone Europe/London",
+			tz:         "Europe/London",
+			wantLocal:  false,
+			wantErr:    false,
+			wantTzName: "Europe/London",
+		},
+		{
+			name:       "valid timezone UTC",
+			tz:         "UTC",
+			wantLocal:  false,
+			wantErr:    false,
+			wantTzName: "UTC",
+		},
+		{
+			name:    "invalid timezone returns error",
+			tz:      "Invalid/Timezone",
+			wantErr: true,
+		},
+		{
+			name:    "gibberish timezone returns error",
+			tz:      "not-a-timezone",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loc, err := LoadTimezone(tt.tz)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("LoadTimezone(%q) expected error, got nil", tt.tz)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("LoadTimezone(%q) unexpected error: %v", tt.tz, err)
+				return
+			}
+
+			if tt.wantLocal {
+				if loc != time.Local {
+					t.Errorf("LoadTimezone(%q) = %v, expected time.Local", tt.tz, loc)
+				}
+			} else {
+				if loc.String() != tt.wantTzName {
+					t.Errorf("LoadTimezone(%q) = %v, expected %s", tt.tz, loc.String(), tt.wantTzName)
+				}
+			}
+		})
+	}
+}
+
+func TestNowIn(t *testing.T) {
+	t.Run("empty timezone returns local time", func(t *testing.T) {
+		before := time.Now()
+		result := NowIn("")
+		after := time.Now()
+
+		if result.Before(before) || result.After(after) {
+			t.Errorf("NowIn(\"\") returned time outside expected range")
+		}
+	})
+
+	t.Run("Local timezone returns local time", func(t *testing.T) {
+		before := time.Now()
+		result := NowIn("Local")
+		after := time.Now()
+
+		if result.Before(before) || result.After(after) {
+			t.Errorf("NowIn(\"Local\") returned time outside expected range")
+		}
+	})
+
+	t.Run("valid timezone returns time in that timezone", func(t *testing.T) {
+		result := NowIn("UTC")
+		if result.Location().String() != "UTC" {
+			t.Errorf("NowIn(\"UTC\") location = %v, expected UTC", result.Location())
+		}
+	})
+
+	t.Run("invalid timezone falls back to local", func(t *testing.T) {
+		before := time.Now()
+		result := NowIn("Invalid/Timezone")
+		after := time.Now()
+
+		if result.Before(before) || result.After(after) {
+			t.Errorf("NowIn(\"Invalid/Timezone\") returned time outside expected range")
+		}
+	})
+}
+
+func TestInTimezone(t *testing.T) {
+	fixedTime := time.Date(2024, time.January, 15, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name       string
+		inputTime  time.Time
+		tz         string
+		wantTzName string
+		wantSame   bool
+	}{
+		{
+			name:       "empty timezone converts to local",
+			inputTime:  fixedTime,
+			tz:         "",
+			wantTzName: time.Local.String(),
+		},
+		{
+			name:       "Local timezone converts to local",
+			inputTime:  fixedTime,
+			tz:         "Local",
+			wantTzName: time.Local.String(),
+		},
+		{
+			name:       "valid timezone converts correctly",
+			inputTime:  fixedTime,
+			tz:         "America/New_York",
+			wantTzName: "America/New_York",
+		},
+		{
+			name:       "UTC timezone",
+			inputTime:  fixedTime,
+			tz:         "UTC",
+			wantTzName: "UTC",
+		},
+		{
+			name:      "invalid timezone returns original time",
+			inputTime: fixedTime,
+			tz:        "Invalid/Timezone",
+			wantSame:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := InTimezone(tt.inputTime, tt.tz)
+
+			if tt.wantSame {
+				if !result.Equal(tt.inputTime) || result.Location() != tt.inputTime.Location() {
+					t.Errorf("InTimezone(%v, %q) = %v, expected original time unchanged", tt.inputTime, tt.tz, result)
+				}
+				return
+			}
+
+			if result.Location().String() != tt.wantTzName {
+				t.Errorf("InTimezone(%v, %q) location = %v, expected %s", tt.inputTime, tt.tz, result.Location(), tt.wantTzName)
+			}
+
+			if !result.Equal(tt.inputTime) {
+				t.Errorf("InTimezone(%v, %q) instant changed: got %v", tt.inputTime, tt.tz, result)
+			}
+		})
+	}
+}
+
+func TestInTimezone_PreservesInstant(t *testing.T) {
+	utcTime := time.Date(2024, time.January, 15, 17, 0, 0, 0, time.UTC)
+	nyTime := InTimezone(utcTime, "America/New_York")
+
+	if !utcTime.Equal(nyTime) {
+		t.Errorf("InTimezone should preserve the instant: UTC %v != NY %v", utcTime, nyTime)
+	}
+
+	if nyTime.Hour() != 12 {
+		t.Errorf("InTimezone(17:00 UTC, America/New_York) hour = %d, expected 12 (EST)", nyTime.Hour())
+	}
+}

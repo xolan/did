@@ -7,6 +7,15 @@ import (
 	"time"
 )
 
+var (
+	isoPartialRe    = regexp.MustCompile(`^\d{4}-\d{1,2}$`)
+	yearOnlyRe      = regexp.MustCompile(`^\d{4}$`)
+	isoPartialDayRe = regexp.MustCompile(`^\d{1,2}-\d{1,2}$`)
+	euroPartialRe   = regexp.MustCompile(`^\d{1,2}/\d{1,2}$`)
+	tooManyPartsRe  = regexp.MustCompile(`^\d+[-/]\d+[-/]\d+[-/]`)
+	relativeDaysRe  = regexp.MustCompile(`^last\s(\d+)\sdays?$`)
+)
+
 // ParseDate parses a date string in YYYY-MM-DD or DD/MM/YYYY format.
 // Returns the parsed date at midnight (start of day) in local timezone.
 // For ambiguous dates (like 05/06/2024), ISO format (YYYY-MM-DD) is preferred.
@@ -37,15 +46,7 @@ func ParseDate(input string) (time.Time, error) {
 	return time.Time{}, buildDateParseError(input)
 }
 
-// buildDateParseError creates a helpful error message based on the input pattern
 func buildDateParseError(input string) error {
-	// Check for common partial date patterns
-	isoPartialRe := regexp.MustCompile(`^\d{4}-\d{1,2}$`)          // YYYY-MM (missing day)
-	yearOnlyRe := regexp.MustCompile(`^\d{4}$`)                    // YYYY (year only)
-	isoPartialDayRe := regexp.MustCompile(`^\d{1,2}-\d{1,2}$`)     // MM-DD or DD-MM (missing year)
-	euroPartialRe := regexp.MustCompile(`^\d{1,2}/\d{1,2}$`)       // DD/MM (missing year)
-	tooManyPartsRe := regexp.MustCompile(`^\d+[-/]\d+[-/]\d+[-/]`) // Too many separators
-
 	switch {
 	case yearOnlyRe.MatchString(input):
 		return fmt.Errorf("incomplete date '%s': missing month and day (use format YYYY-MM-DD, e.g., %s-01-15)", input, input)
@@ -77,10 +78,7 @@ func ParseRelativeDays(input string) (start, end time.Time, err error) {
 		return time.Time{}, time.Time{}, fmt.Errorf("relative date cannot be empty (use format 'last N days', e.g., 'last 7 days')")
 	}
 
-	// Match "last N days" or "last N day" (singular)
-	// Use strict whitespace matching - single spaces only
-	re := regexp.MustCompile(`^last\s(\d+)\sdays?$`)
-	matches := re.FindStringSubmatch(input)
+	matches := relativeDaysRe.FindStringSubmatch(input)
 
 	if matches == nil {
 		return time.Time{}, time.Time{}, fmt.Errorf("invalid format '%s' (use 'last N days' or 'last N day', e.g., 'last 7 days', 'last 30 days', 'last 1 day')", input)
