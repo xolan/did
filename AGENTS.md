@@ -8,7 +8,7 @@
 
 Go CLI time tracker using Cobra. Log work with durations, filter by project/tag, timer mode for real-time tracking.
 
-**Tech Stack:** Go 1.25+, Cobra CLI framework
+**Tech Stack:** Go 1.25+, Cobra CLI framework, Bubble Tea TUI, bubbletint theming
 
 ## STRUCTURE
 
@@ -32,6 +32,9 @@ did/
 | `stats/` | 2 | Statistics calculations, project/tag breakdowns |
 | `osutil/` | 2 | `PathProvider` interface for cross-platform paths |
 | `app/` | 1 | `const Name = "did"` |
+| `tui/` | 10+ | Bubble Tea TUI, views, theming via bubbletint |
+| `service/` | 8 | Business logic services for TUI |
+| `cli/` | 2 | CLI helpers, formatters |
 
 ## WHERE TO LOOK
 
@@ -43,6 +46,9 @@ did/
 | Add time filter | `internal/timeutil/datefilter.go` | Follow `ThisWeek()`/`LastWeek()` pattern |
 | Modify config | `internal/config/config.go` | Add field, update `Validate()` |
 | Test any command | `cmd/*_test.go` | Use `SetDeps()` pattern |
+| Modify TUI views | `internal/tui/views/*.go` | Follow existing view pattern |
+| Add TUI theme | `internal/tui/ui/theme.go` | Uses bubbletint registry |
+| Modify TUI styles | `internal/tui/ui/styles.go` | Update `NewStylesFromRegistry()` |
 
 ## DEPENDENCY GRAPH
 
@@ -128,10 +134,40 @@ Config file is **optional** — all settings have sensible defaults.
 |--------|--------|---------|---------|
 | `week_start_day` | `"monday"`, `"sunday"` | `"monday"` | `--this-week`, `--prev-week`, stats |
 | `timezone` | IANA name or `"Local"` | `"Local"` | All time operations |
+| `theme` | Any bubbletint theme name | `"dracula"` | TUI color scheme |
 
 ```bash
 did config --init  # Create sample config.toml
 did config         # Show current settings
+```
+
+## TUI
+
+Launch with `did tui`. 280+ themes available via bubbletint.
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Tab`, `1-5` | Switch views |
+| `j/k`, `↑/↓` | Navigate entries |
+| `t` | Today's entries (Entries view) / Open theme selector (Config view) |
+| `y` | Yesterday's entries |
+| `w` | This week's entries |
+| `r` | Refresh data |
+| `Enter` | Select / Open theme selector |
+| `Esc` | Cancel / Close selector |
+| `q` | Quit |
+
+### Theme Architecture
+
+```
+ThemeProvider (ui/theme.go)
+    ├── Uses bubbletint.Registry
+    ├── Stores current theme name
+    └── Generates Styles from theme colors
+
+ThemeChangedMsg broadcasts to all views when theme changes
 ```
 
 ## DEVELOPMENT NOTES

@@ -25,17 +25,21 @@ type Config struct {
 	Timezone string `toml:"timezone"`
 	// DefaultOutputFormat defines the default output format for entries
 	DefaultOutputFormat string `toml:"default_output_format"`
+	// Theme defines the TUI color theme (bubbletint theme name)
+	Theme string `toml:"theme"`
 }
 
 // DefaultConfig returns a Config with sensible defaults that match current behavior.
 // - week_start_day: "monday" (ISO 8601 standard, current behavior)
 // - timezone: "Local" (use system local timezone)
 // - default_output_format: "" (use current default formatting)
+// - theme: "" (use default TUI theme)
 func DefaultConfig() Config {
 	return Config{
 		WeekStartDay:        "monday",
 		Timezone:            "Local",
 		DefaultOutputFormat: "",
+		Theme:               "",
 	}
 }
 
@@ -61,6 +65,7 @@ func GetConfigPath() (string, error) {
 func (c *Config) Normalize() {
 	c.WeekStartDay = strings.ToLower(strings.TrimSpace(c.WeekStartDay))
 	c.Timezone = strings.TrimSpace(c.Timezone)
+	c.Theme = strings.TrimSpace(c.Theme)
 }
 
 func (c *Config) Validate() error {
@@ -168,5 +173,26 @@ func GenerateSampleConfig() string {
 #   default_output_format = ""      # Use default format (default)
 #
 # default_output_format = ""
+
+# ============================================================================
+# TUI Theme
+# ============================================================================
+# Defines the color theme for the Terminal User Interface (TUI).
+# Uses bubbletint theme names. See available themes at:
+# https://github.com/lrstanley/bubbletint
+#
+# Popular themes: dracula, nord, gruvbox, catppuccin-mocha, tokyo-night,
+# one-dark, solarized-dark, github-dark
+#
+# Default: "" (uses built-in default theme)
+#
+# Examples:
+#   theme = "dracula"              # Dracula theme
+#   theme = "nord"                 # Nord theme
+#   theme = "catppuccin-mocha"     # Catppuccin Mocha theme
+#
+# You can also change themes within the TUI using [ and ] keys.
+#
+# theme = ""
 `
 }

@@ -84,6 +84,11 @@ Projects and Tags:
   did API work @client #backend for 2h    Combine project with multiple tags`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Check for --tui flag
+		if CheckTUIFlag(cmd) {
+			return
+		}
+
 		// Parse shorthand filters (@project, #tag) and remove them from args
 		args = parseShorthandFilters(cmd, args)
 

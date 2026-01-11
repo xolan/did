@@ -27,6 +27,7 @@ This is an experimental project created almost exclusively using [Claude Code](h
 - View statistics for week or month
 - Simple duration format (hours and minutes)
 - Data stored locally in JSONL format
+- Interactive TUI with 280+ color themes
 
 ## Test coverage
 
@@ -290,6 +291,43 @@ did stats           # Statistics for current week
 did stats --month   # Statistics for current month
 ```
 
+### Interactive TUI
+
+Launch the interactive terminal interface:
+
+```bash
+did tui
+```
+
+**TUI Features:**
+- View entries, timer status, statistics, and configuration
+- Navigate with keyboard shortcuts
+- 280+ color themes via bubbletint
+
+**Keyboard shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| `Tab`, `1-5` | Switch between views |
+| `j/k` or `↑/↓` | Navigate entries / themes |
+| `t` | Show today's entries / Open theme selector (Config view) |
+| `y` | Show yesterday's entries |
+| `w` | Show this week's entries |
+| `r` | Refresh data |
+| `Enter` | Select theme (Config view) |
+| `Esc` | Cancel / close theme selector |
+| `q` | Quit |
+
+**Changing themes:**
+1. Go to Config view (press `5`)
+2. Press `t` or `Enter` to open the theme selector
+3. Navigate with `j/k` or arrow keys
+4. Press `Enter` to select, `Esc` to cancel
+
+**Popular themes:** `dracula`, `nord`, `gruvbox-dark`, `monokai`, `solarized-dark`, `catppuccin-mocha`, `tokyo-night`
+
+Theme changes are saved automatically to your config file.
+
 ### Maintenance commands
 
 ```bash
@@ -371,12 +409,14 @@ Configuration is optional. Create a config file with `did config --init`:
 |--------|--------|---------|-------------|
 | `week_start_day` | `"monday"`, `"sunday"` | `"monday"` | First day of the week for `--this-week` and stats |
 | `timezone` | IANA timezone or `"Local"` | `"Local"` | Timezone for all time operations |
+| `theme` | Any bubbletint theme name | `"dracula"` | TUI color scheme |
 
 Example `config.toml`:
 
 ```toml
 week_start_day = "sunday"
 timezone = "America/New_York"
+theme = "nord"
 ```
 
 ## Development
