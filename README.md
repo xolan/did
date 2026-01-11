@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="did logo" width="128" height="128">
+</p>
+
 # did
 
 [![CI](https://github.com/xolan/did/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/xolan/did/actions/workflows/ci.yml)
@@ -64,6 +68,12 @@ eval "$(did completion zsh)"
 ```bash
 # Add to ~/.config/fish/config.fish
 did completion fish | source
+```
+
+**PowerShell:**
+```powershell
+# Add to your PowerShell profile
+did completion powershell | Out-String | Invoke-Expression
 ```
 
 ### Using just
@@ -336,6 +346,38 @@ Active timer state is stored in `timer.json` in the same config directory:
 | Windows  | `%AppData%/did/timer.json` |
 
 The timer file is automatically created when you start a timer and removed when you stop it.
+
+**Backups:**
+
+Up to 3 rotating backups are automatically created before destructive operations (edit, delete, restore). Use `did restore [1-3]` to restore from a backup.
+
+**Soft Delete:**
+
+Deleted entries are retained for 7 days and can be restored with `did undo`. After 7 days, they are automatically purged. Use `did purge` to permanently remove all deleted entries immediately.
+
+## Configuration
+
+Configuration is optional. Create a config file with `did config --init`:
+
+| Platform | Location |
+|----------|----------|
+| Linux    | `~/.config/did/config.toml` |
+| macOS    | `~/Library/Application Support/did/config.toml` |
+| Windows  | `%AppData%/did/config.toml` |
+
+**Available options:**
+
+| Option | Values | Default | Description |
+|--------|--------|---------|-------------|
+| `week_start_day` | `"monday"`, `"sunday"` | `"monday"` | First day of the week for `--this-week` and stats |
+| `timezone` | IANA timezone or `"Local"` | `"Local"` | Timezone for all time operations |
+
+Example `config.toml`:
+
+```toml
+week_start_day = "sunday"
+timezone = "America/New_York"
+```
 
 ## Development
 
