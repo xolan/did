@@ -11,3 +11,5 @@ did
 dist/
 # Temporary test files
 /test_*
+# Sisyphus
+.sisyphus/
